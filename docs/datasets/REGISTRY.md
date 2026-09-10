@@ -37,7 +37,8 @@ split files are versioned.
 | **MUST** | Minutiae + mask ground truth (enables F1) | not started | — | Same IAB route. ~21k impressions, manually marked minutiae, PPI, semantic masks. |
 | **NIST SD302 (N2N)** | Multi-sensor real capture | not started | — | `nigos.nist.gov/datasets/sd302/request`. Institutional email; manual NIST review. |
 | **NIST SD300** | Naturally poor / uncooperative captures | not started | — | Request form. 888 subjects × 10 fingers, ink cards. |
-| **CASIA-FingerprintV5** | Free substitute for worn population (workers, waiters) | **needs registration** | 2026-09-10: idealtest.org is a JS portal with an expired TLS cert; browser download only | `idealtest.org`, registration. Site availability historically unreliable — try early. |
+| **CASIA-FingerprintV5** (id 7) | Free substitute for worn population (workers, waiters) | **needs registration + approval** | 2026-09-10: confirmed live via portal API. 5 subset zips, ~1.6 GB. Manual human review step — walkthrough in `casia-access.md` | `idealtest.org`, registration. Site availability historically unreliable — try early. |
+| **CASIA Fingerprint Subject Ageing** (id 15) | ⭐ Ageing is a named degradation cause in scope; public longitudinal fingerprint data is near-nonexistent | **needs registration + approval** | 2026-09-10: found via portal API — **absent from both the thesis plan and the literature review**. 3,664 images. Longitudinal structure unconfirmed until the note PDF is readable |
 | IIITD MSLFD | Surface-variation latents | not started | — | IAB route; low priority |
 | LFIW | Post-SD27 latent replacement | not started | — | Request; low priority |
 

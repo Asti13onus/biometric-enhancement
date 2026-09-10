@@ -46,7 +46,8 @@ Fully automatable in one script run.
 |---|---|---|---|---|---|
 | B1 | **ChaLearn LAP Track 3** ⭐ | 168,000 imgs = 84,000 **paired** (clean, degraded); train 75,600 pairs; synthetic test 8,400; real test 140 fingers × 12 | ~5–15 GB (unconfirmed) | Not stated on the page | `chalearnlap.cvc.uab.cat/dataset/32/description/` — download link is behind site registration; **to confirm at download time** |
 | B2 | **SOCOFing** | 6,000 real (600 subjects × 10 fingers) **+ ~17,900 synthetically altered** (obliteration / central rotation / z-cut × Easy/Medium/Hard) | ~0.5–1 GB | **Non-commercial research only** | Kaggle `ruizgara/socofing` — needs a Kaggle account + API token |
-| B3 | **CASIA-FingerprintV5** | 500 subjects × 8 fingers × 5 = 20,000 imgs, 328×356 @ 512 dpi, BMP | ~2.5 GB | **Prohibits publishing and redistribution** | `idealtest.org` — free registration. Site availability historically unreliable; try early |
+| B3 | **CASIA-FingerprintV5** (portal id 7) | portal reports 63,407 files; published description says 20,000 imgs (500 subjects × 8 fingers × 5), 328×356 @ 512 dpi, BMP | 1.60 GB in 5 subset zips | **Prohibits publishing and redistribution** | `idealtest.org` — registration **plus manual approval**. Walkthrough: `casia-access.md` |
+| B4 | **CASIA Fingerprint Subject Ageing** (portal id 15) ⭐ | 3,664 imgs | — | as B3 | Same registration. **Found via the portal API; in neither the plan nor the review.** Ageing is a named degradation cause in scope, and public longitudinal fingerprint data barely exists. Structure unconfirmed until the note PDF is readable |
 
 ### Roles
 - **B1 ChaLearn** — the primary paired training set and the *baseline* degradation model we
