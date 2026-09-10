@@ -6,6 +6,97 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-09-11 — Session 7: two-month reframe, dataset dossier, NBIS built, harness live
+
+**The deadline changed the thesis**
+- Two months to **final submission, thesis document included** — not eight. That is roughly
+  five build weeks and three writing weeks. The four-contribution plan does not fit.
+- Re-scoped to **one coupled contribution**, written up in
+  `docs/brainstorms/2026-09-11-wear-aware-abstaining-enhancement-requirements.md`:
+  a single network estimating segmentation, orientation, frequency, ridge map and per-pixel
+  confidence, supervised throughout by our own wear degradation model.
+- The coupling *is* the argument: because we synthesise the degradation, we know per pixel
+  how much ridge evidence was destroyed, which is a direct supervision target for the
+  confidence head. No method that inherits its degradation from elsewhere can train it.
+  *You can only abstain honestly if you know what was destroyed.*
+- Architecture is deliberately unremarkable, per the literature's own conclusion. Novelty
+  sits in what the network estimates and what supervises it. Collapsing Cappelli's four
+  networks into one is also a *simplification* that serves the 500 ms CPU budget.
+- **Cut:** multi-impression fusion, the domain-alignment and unpaired-translation comparison
+  arms, demographic stratification. Approach A (four-stage pipeline, only the enhancer
+  replaced) is a **contracted fallback at the end of week 4**, not an aspiration.
+- Headline metric is matcher EER on real prints with bootstrap intervals; minutiae precision
+  against synthetic pseudo-ground-truth is supporting and labelled as such.
+
+**SOCOFing dropped**
+- Supervisor guidance: no Kaggle datasets for training. SOCOFing was the only Kaggle-sourced
+  set in the corpus. Our own measurement agrees independently — 96×103 px declared as
+  500 dpi describes a 4.9 mm finger, so true sampling is nearer 200 dpi.
+- Cost: the damage-severity axis and the only demographic label. Severity is recovered, and
+  improved, by applying our own wear model at controlled severities to real clean prints —
+  known parameters instead of a vendor's undocumented easy/medium/hard. Demographic
+  stratification has no substitute; **CASIA registration is now the highest-priority
+  outstanding request.**
+
+**Dataset dossier for the supervisor**
+- `docs/datasets/DATASET_DOSSIER.md` + `.pdf` (6pp). Requested as a gate before project work
+  continues: what was acquired, what was not, links and descriptions for both.
+- Figures are script-produced from the committed manifests (`scripts/dataset_dossier_stats.py`),
+  which caught two wrong published specs — SOCOFing's dpi above, and L3-SF's advertised
+  1200 dpi applying to only 740 of its 8,140 images.
+- `scripts/render_pdf.py` renders any project markdown to PDF via markdown-it-py plus
+  headless Chrome. No LaTeX, no new dependencies.
+
+**NBIS built from source — the critical path is clear**
+- This machine had **no C compiler at all**. Provisioned portable winlibs MinGW-w64 GCC 16.2,
+  cmake 3.31.6 from pip, and a `make` shim, all under `E:	oolchains` — nothing on C:,
+  nothing installed system-wide.
+- NBIS 5.0.0 needed **four non-obvious patches**, all recorded in `docs/nbis-build.md`:
+  CMake must be 3.31 (4.x dropped `cmake_minimum_required(2.6)`); `setup.sh` must use
+  `pwd -W` because native make cannot resolve Git Bash's `/e/...`; `-fpermissive -fcommon`
+  because GCC 14 made implicit declarations errors and GCC 10 made `-fno-common` the
+  default; and `make-depend`'s sed strips to the first colon, which on `E:/...` is the drive
+  letter, producing `.d` files make rejects.
+- **mindtct reads none of the formats our datasets ship in** — no TIFF, BMP or PNG — and
+  cannot size a headerless raw file. WSQ was rejected as lossy; putting lossy compression
+  under every number in the thesis is not acceptable when `cjpegl` exists. Lossless JPEG
+  round-trip verified **byte-identical**, all 307,200 bytes of an FVC2004 image.
+
+**Harness live, Phase 0 gate closed**
+- `fpe.eval.registry` (git SHA + config hash + manifest hash per row), `fpe.eval.protocol`
+  (identity parsed from filenames — the manifests do not carry it for FVC, Neurotech or
+  FVS), `fpe.metrics.matching` (EER + bootstrap CI), `fpe.metrics.nbis`, `fpe.metrics.nfiq2`,
+  `fpe.eval.baseline`, and `experiments/baseline_nbis.py`.
+- EER implementation verified against the analytic Φ(−d/2) to within 0.0006.
+- First two registry rows, and the evidence the harness measures what it claims:
+
+  | Dataset | EER | 95% CI | NFIQ 2 mean | FTA |
+  |---|---|---|---|---|
+  | FVC2004 DB1_B (dry / distorted) | 0.1142 | [0.089, 0.141] | 56.0 | 0% |
+  | Neurotech CrossMatch (clean) | 0.0066 | [0.004, 0.011] | 73.4 | 0% |
+
+  A 17× gap in the expected direction with quality tracking it. 83,028 pairs matched.
+
+**Findings worth keeping**
+- **Bootstrap intervals are not optional at this corpus size.** An FVC "B" subset yields 280
+  genuine pairs; the interval on a 0.16 EER spans ±2.2 points. A point estimate would be
+  misleading.
+- Impostor pairing uses all cross-finger impression pairs, not the official FVC
+  first-impression rule, which would give 45 pairs per database. Documented deviation.
+- `pyfing` is **Keras 3**, so it runs on the PyTorch backend — the TF-2.10 Windows-GPU dead
+  end in `STRATEGY.md` §5 is avoidable and WSL2 is not needed. It also ships **LEADER**, an
+  end-to-end minutiae extractor.
+
+**Next**
+- Second independent matcher for R17 — SourceAFIS or MCC — still unchosen and still a
+  resolve-before-planning question.
+- Install `pyfing`; run GBFEN and SNFEN as baselines through this harness.
+- Baseline rows for the remaining real sets (FVC2000/2002, U.are.U, FVS, MINEX).
+- Wear degradation model and its label export — week 2 of the plan.
+- CASIA registration; IAB licence paperwork still unstarted.
+
+---
+
 ## 2026-09-10 - Session 6: machine ran out of memory; corpus reconciled
 
 **What broke**
