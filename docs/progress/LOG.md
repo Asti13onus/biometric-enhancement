@@ -6,6 +6,96 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-09-11 — Session 8: baselines measured, plan written, wear model built
+
+**Baselines — the 2026 SOTA, run by us**
+- `pyfing` installed and running on the **PyTorch** backend. All five pretrained models
+  (SUFS, SNFOE, SNFFE, SNFEN, LEADER) ship in the wheel, so baselines needed no downloads
+  and no training.
+- Full four-database FVC2004, 1,120 genuine pairs, sensor-matched impostors:
+
+  | Method | EER | 95% CI | Minutiae/img | NFIQ 2 |
+  |---|---|---|---|---|
+  | No enhancement | 0.0991 | [0.0876, 0.1117] | 62.1 | 46.0 |
+  | GBFEN | 0.0955 | [0.0837, 0.1102] | 69.9 | 57.5 |
+  | SNFEN | **0.0895** | [0.0770, 0.1010] | 66.1 | 59.2 |
+
+- **The ordering reproduces Cappelli's published ranking on a benchmark he never used**,
+  since SD27 is unobtainable. That is an independent replication and it is ours to cite.
+- **Nothing is resolved**: every interval overlaps the control. Diagnosed as *my* error, not
+  the data's — all conditions score the **same** pairs, so comparing independent bootstrap
+  CIs is under-powered. A paired bootstrap on the EER difference is now planned (U11).
+- The cross-column pattern is the thesis argument, measured on our own benchmark: NFIQ 2
+  climbs hard (46.0 → 57.5 → 59.2) and minutiae counts rise 6–13%, while EER moves inside
+  noise. Quality gain is not matching gain; extra minutiae buying no accuracy is what
+  spurious minutiae look like. SNFEN adds *fewer* minutiae than GBFEN and scores better.
+- Deployment number: **~1.05 s/image on CPU** for the four-network chain, against a 500 ms
+  budget. Direct evidence for collapsing four networks into one.
+
+**Two environment findings**
+- **torch 2.14 will not load here.** The x64 VC++ 2015-2022 runtime is 14.32.31332; recent
+  torch needs ≥14.40. Oddly the *x86* redist is already 14.44 — only the 64-bit one is
+  stale. torch 2.5.1 works against what is installed. Updating needs admin; deferred.
+- pyfing calls `.numpy()` on model outputs, which raises under torch because tensors carry
+  `requires_grad`. Every call wrapped in `torch.no_grad()`.
+
+**Correctness fix in the pairing protocol**
+- `build_pairs` allowed impostor pairs **across** FVC databases — DB1's optical sensor
+  against DB3's thermal sweep. Trivially separable for reasons unrelated to identity, which
+  depresses EER without any method improving: **38,400 of 49,920** pairs on a full FVC2004
+  run. Impostors are now sensor-matched by default. Single-subset rows already written are
+  unaffected.
+
+**Implementation plan (weeks 2-5)**
+- `docs/plans/2026-09-11-001-feat-wear-aware-abstaining-enhancement-plan.md`. Twelve units,
+  four phases, traced to the origin requirements. Written *after* week 1, so it rests on
+  measured facts rather than assumptions.
+- **R4's premise was false.** Anguli exports only pattern type and singular points — no
+  orientation or frequency fields. Resolved by distilling from Cappelli's pretrained
+  estimators run on the **clean** impression. Honest cost, to be stated in the thesis: two
+  heads are then supervised by another model's output, not human annotation. The ridge-map
+  and confidence heads, which carry the claims, are unaffected.
+- **The Anguli master is binary** at 275×400 — already the near-binary target form Cappelli
+  builds by hand — and impressions are greyscale and **pixel-aligned** with it. So: degrade
+  the greyscale impression as input, reconstruct the binary master. No registration.
+- Decided with the user: R17 satisfied by varying the **extractor** (LEADER vs mindtct)
+  rather than the matcher, since spurious minutiae originate in extraction; a flat
+  precision–coverage curve is reported as falsification, not pivoted around.
+- Self-review caught two gaps, both fixed before commit: no justification for training from
+  scratch rather than warm-starting from SNFEN's released weights (rejected — incompatible
+  stem, single-head decoder, and it would contaminate the training-data ablation), and
+  nothing produced an **Anguli manifest**, without which U7 could not evaluate a trained
+  model and U9 had no pairs to sweep.
+
+**U1 done — wear degradation model** (branch `feat/wear-degradation-model`)
+- `src/fpe/degradation/wear.py`: ridge amplitude attenuation, flexion creases, dryness
+  fragmentation, pressure-dependent partial contact. Parallel in shape to
+  `latent.py` so the two arms of the central comparison are interchangeable.
+- **Two properties hold by construction, not by luck.** Severity 0 is exactly the identity,
+  and damage is monotone in severity for a fixed seed — because every random quantity is
+  sampled at unit scale *before* severity is applied. Crease positions are pre-sampled and
+  severity selects a prefix; fragmentation thresholds a fixed noise field so break area only
+  grows.
+- Fragmentation is **anisotropic** via a steerable filter bank aligned to structure-tensor
+  orientation. Dry skin breaks a ridge into dashes *along* its length; round blobs are the
+  common shortcut and are wrong. The test discriminates — an isotropic config scores aspect
+  0.97 against the required 1.3.
+- **Foreground mask support came from reading the figure, not the plan.** Without a mask the
+  model drew creases and breaks across blank background and reported destroyed evidence
+  where no ridge ever existed — supervision that would have taught the confidence head to
+  distrust empty paper.
+- 33 tests. `results/figures/wear_degradation_severity.png` shows evidence falling
+  1.00 → 0.23 across the sweep.
+
+**Next**
+- U2: supervision build (pyfing teachers over 5,584 fingers), splits by finger id, and the
+  Anguli manifest. Long single-threaded pass — make it resumable before starting it.
+- U3: realism validation and the three-way degradation figure.
+- Branch `feat/wear-degradation-model` is unmerged; `main` is untouched.
+- Still unstarted and still the longest lead time: CASIA registration, IAB licence paperwork.
+
+---
+
 ## 2026-09-11 — Session 7: two-month reframe, dataset dossier, NBIS built, harness live
 
 **The deadline changed the thesis**
