@@ -53,7 +53,7 @@ $cs = Get-CimInstance Win32_ComputerSystem
 Set-CimInstance $cs -Property @{ AutomaticManagedPagefile = $false }
 
 # small fixed pagefile on C: so crash dumps still work
-$c = Get-CimInstance Win32_PageFileSetting -Filter "Name='C:\\\\pagefile.sys'"
+$c = Get-CimInstance Win32_PageFileSetting -Filter "Name='C:\\pagefile.sys'"
 if ($c) { Set-CimInstance $c -Property @{ InitialSize = 1024; MaximumSize = 2048 } }
 
 # the real one on E:
