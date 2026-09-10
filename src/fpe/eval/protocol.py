@@ -44,6 +44,7 @@ class Impression:
     relpath: str
     finger_id: str  # identity unit; genuine pairs share this
     impression: str
+    scope: str = ""  # capture context, e.g. "db1_b"; impostors stay within it
 
     @property
     def path(self) -> Path:
@@ -65,21 +66,18 @@ _TWO_PART = re.compile(r"^(?P<finger>\w+?)_(?P<impr>\d+)$")
 _THREE_PART = re.compile(r"^(?P<subject>\w+?)_(?P<finger>\d+)_(?P<impr>\d+)$")
 
 
-def _identity(dataset: str, relpath: str) -> tuple[str, str] | None:
-    """(finger_id, impression) for one manifest row, or None if unparseable."""
+def _identity(dataset: str, relpath: str) -> tuple[str, str, str] | None:
+    """(finger_id, impression, scope) for one manifest row, or None if unparseable."""
     p = Path(relpath)
     stem = p.stem
     # Scope by every directory above the file, so db1_b/101 != db2_b/101.
     scope = "/".join(p.parts[:-1])
+    prefix = f"{dataset}/{scope}" if scope else dataset
 
     if m := _THREE_PART.match(stem):
-        finger = f"{m['subject']}_{m['finger']}"
-        return (f"{dataset}/{scope}/{finger}" if scope else f"{dataset}/{finger}",
-                m["impr"])
+        return f"{prefix}/{m['subject']}_{m['finger']}", m["impr"], prefix
     if m := _TWO_PART.match(stem):
-        finger = m["finger"]
-        return (f"{dataset}/{scope}/{finger}" if scope else f"{dataset}/{finger}",
-                m["impr"])
+        return f"{prefix}/{m['finger']}", m["impr"], prefix
     return None
 
 
@@ -102,13 +100,14 @@ def parse_manifest(
             ident = _identity(row["dataset"], relpath)
             if ident is None:
                 continue
-            finger_id, impr = ident
+            finger_id, impr, scope = ident
             out.append(
                 Impression(
                     dataset=row["dataset"],
                     relpath=relpath,
                     finger_id=finger_id,
                     impression=impr,
+                    scope=scope,
                 )
             )
     return out
@@ -124,10 +123,22 @@ def _by_finger(impressions: Iterable[Impression]) -> dict[str, list[Impression]]
 
 
 def build_pairs(
-    impressions: Sequence[Impression], *, impostor: ImpostorMode = "all"
+    impressions: Sequence[Impression],
+    *,
+    impostor: ImpostorMode = "all",
+    cross_scope: bool = False,
 ) -> PairSet:
-    """All genuine pairs, plus impostor pairs per the chosen rule."""
+    """All genuine pairs, plus impostor pairs per the chosen rule.
+
+    Impostor pairs stay within a capture scope unless `cross_scope` is set.
+    Comparing FVC DB1 against DB2 means comparing an optical sensor against a
+    capacitive one: those impostors are trivially separable for reasons that
+    have nothing to do with identity, and including them depresses the EER
+    without the method having improved. Set `cross_scope=True` only for a
+    deliberate cross-sensor experiment.
+    """
     groups = _by_finger(impressions)
+    scope_of = {f: members[0].scope for f, members in groups.items()}
 
     genuine: list[tuple[Impression, Impression]] = []
     for members in groups.values():
@@ -136,6 +147,8 @@ def build_pairs(
     fingers = sorted(groups)
     impostor_pairs: list[tuple[Impression, Impression]] = []
     for a, b in itertools.combinations(fingers, 2):
+        if not cross_scope and scope_of[a] != scope_of[b]:
+            continue
         if impostor == "first":
             impostor_pairs.append((groups[a][0], groups[b][0]))
         else:

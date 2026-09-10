@@ -33,7 +33,11 @@ def main() -> int:
     )
     ap.add_argument("--bootstrap", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--method", default="none", help="label for the registry row")
+    ap.add_argument(
+        "--method", default="none", choices=["none", "SNFEN", "GBFEN"],
+        help="'none' is the no-enhancement control; the others are pyfing's "
+             "released implementations of the 2026 state of the art",
+    )
     ap.add_argument("--notes", default=None)
     ap.add_argument("--dry-run", action="store_true", help="do not write to the registry")
     args = ap.parse_args()
@@ -48,11 +52,19 @@ def main() -> int:
 
     label = f"{args.dataset}/{args.subset}" if args.subset else args.dataset
     print(f"baseline: {label}  method={args.method}")
+
+    enhancer = None
+    if args.method != "none":
+        from fpe.models.pyfing_baseline import PyfingEnhancer
+
+        enhancer = PyfingEnhancer(args.method, cache_dir=work_dir)
+
     result = run_baseline(
         manifest_path=manifest,
         data_root=data_root,
         work_dir=work_dir,
         subset=args.subset,
+        preprocess=enhancer,
         impostor=args.impostor,
         n_resamples=args.bootstrap,
         seed=args.seed,
@@ -60,6 +72,8 @@ def main() -> int:
     )
 
     m = result.metrics
+    if enhancer is not None:
+        m.update(enhancer.inference_seconds)
     print(
         f"\n  EER {m['eer']:.4f}  "
         f"95% CI [{m['eer_ci_low']:.4f}, {m['eer_ci_high']:.4f}]\n"
@@ -69,6 +83,9 @@ def main() -> int:
     )
     if "nfiq2_mean" in m:
         print(f"  NFIQ 2 mean {m['nfiq2_mean']:.1f}  median {m['nfiq2_median']:.0f}")
+    if "inference_mean_s" in m:
+        print(f"  enhancement {m['inference_mean_s']*1000:.0f} ms/image on CPU "
+              f"(n={m['inference_n']}, warm-up excluded)")
 
     if args.dry_run:
         print("\n  --dry-run: registry not written")
