@@ -6,6 +6,63 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-09-10 — Session 5: ChaLearn dead, baseline arm built here instead
+
+**Blocked, permanently**
+- **ChaLearn is unrecoverable.** The user exhausted login, password reset and repeated
+  sign-up across several addresses; all fail. **ADR 0003 triggered the same day.** The email
+  to Sergio Escalera is still worth sending and may yet recover the original data, but
+  Phase 1 no longer waits on it.
+
+**Correction to my own earlier work**
+- The `chalearn-like` Anguli preset I wrote in session 4 **overstated what it produced.**
+  ChaLearn applies **nine** artefact types — blur, brightness, contrast, elastic transform,
+  occlusion, scratches, resolution reduction, rotation, and **compositing onto background
+  textures**. Anguli's flags cover roughly four and cannot composite backgrounds at all.
+  Preset renamed `anguli-noise`; ADR 0003 amended.
+
+**Done**
+- `fpe.degradation.latent` — the real nine-artefact recipe, in our own code. Seeded, and it
+  returns a per-image record of which artefacts fired with which parameters, so any sample
+  can be explained afterwards. Verified on FVC2004 DB1_B: all nine types fire, same seed
+  reproduces exactly, different seed differs.
+- `fpe.degradation.backgrounds` — DTD texture bank (5,640 images, 47 categories; the source
+  SFP used). Downloaded and extracted, 625 MB.
+- Division of labour now: **Anguli supplies clean masters plus acquisition variation across
+  impressions; all degradation happens in our code.** Better for a thesis whose central
+  claim is about degradation models — "what was applied" must be inspectable, not split
+  across a closed binary and a script.
+- `results/figures/latent_degradation_examples.png` — the visual audit, and the thesis
+  figure for the control condition. The wear-model figure will reuse the layout so the two
+  read side by side. Output looks correctly latent-like: prints on visible surfaces, partial
+  contact, scratches cutting through ridges.
+- Started the 20,000-finger x 3-impression corpus (`--preset clean`, seed 20260910) as a
+  background run into `data/processed/anguli_20k`.
+
+**Findings worth keeping**
+- **Cappelli's leakage criticism is answered structurally, not procedurally.** DTD textures
+  were never fingerprints, so no fingerprint test image can leak through them; and DTD is
+  partitioned **by category** via a filename hash, so a training image cannot receive a
+  texture from the same family as a test one. `split="test"` cannot return a training
+  texture — it is not a flag someone can forget to pass. Verified disjoint at both category
+  and file level: 35/8/4 categories = 4,200/960/480 textures, all 5,640 assigned.
+- **Corpus size deliberately capped at 20,000 fingers, not 84,000.** Cappelli's SNFEN, trained
+  on 360 images, beats FingerGAN trained on 130,000. Spending 22 h of wall clock to match a
+  corpus size whose numbers we cannot compare against anyway (no ChaLearn access) is poor
+  value. 20,000 pairs plus fusion triplets covers every Phase 1 need; scaling up later is
+  one overnight run if a baseline demonstrably requires it.
+- ChaLearn published artefact *types* but not their parameter distributions, so the severity
+  ranges in `LatentConfig` are ours. Another reason exact comparability is not claimed.
+
+**Next**
+- Send the Escalera email (drafted); CASIA registration still outstanding.
+- Group C emails still to draft: PrintsGAN, Tsinghua SD27 annotations, FVC segmentation GT.
+- IAB licence (Registrar's signature) and NIST SD302 — **still the critical path, still not
+  started.** Every other blocker so far has had a workaround; these two do not.
+- Install NFIQ 2 + NBIS to close the Phase 0 gate.
+
+---
+
 ## 2026-09-10 — Session 4: ChaLearn blocked, contingency armed and verified
 
 **Blocked**

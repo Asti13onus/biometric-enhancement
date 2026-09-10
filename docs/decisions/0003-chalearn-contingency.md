@@ -42,11 +42,27 @@ Phase 1 is not waiting on it.
 ## Why regeneration is a genuine substitute
 
 ChaLearn's training set was itself generated with Anguli, and measurement confirms the match:
-Anguli's default output is **275×400 8-bit greyscale — exactly ChaLearn's geometry**. The
-published ChaLearn artefact list (blur, brightness, contrast, elastic transformation,
-occlusion, scratch, resolution, rotation, plus backgrounds) maps onto Anguli's `-noise`,
-`-scratch`, `-rot`, `-trans` controls, captured as the `chalearn-like` preset in
-`scripts/generate_anguli.py`.
+Anguli's default output is **275×400 8-bit greyscale — exactly ChaLearn's geometry**.
+
+**Correction to the first version of this ADR.** It claimed Anguli's `-noise` / `-scratch` /
+`-rot` / `-trans` flags reproduced the ChaLearn artefact list. They do not. ChaLearn applies
+**nine** artefact types — blur, brightness, contrast, elastic transformation, occlusion,
+scratches, resolution reduction, rotation, **and compositing onto background textures** — of
+which Anguli's flags cover roughly four, with no background compositing at all. A preset
+named `chalearn-like` therefore overstated what it produced, and has been renamed
+`anguli-noise`.
+
+The corrected division of labour:
+
+| Stage | Component | Responsibility |
+|---|---|---|
+| 1 | Anguli (`scripts/generate_anguli.py --preset clean`) | clean masters + acquisition variation across impressions of one finger |
+| 2 | `fpe.degradation.latent` | the full nine-artefact ChaLearn list, in our own code |
+
+Keeping every artefact in stage 2 beats splitting it across a closed binary and a script:
+this thesis's central claim is *about* degradation models, so "what exactly was applied" has
+to be inspectable. `LatentDegradation` returns a per-image record of which artefacts fired
+with which parameters, so any sample can be explained after the fact.
 
 Measured throughput on this machine (8 threads, GTX 1650 box, CPU-only generation):
 **1.41 fingers/sec — 4.2 images/sec.** So a ChaLearn-equivalent 84,000-pair corpus is a
