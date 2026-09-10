@@ -26,6 +26,7 @@ split files are versioned.
 | PrintsGAN | Synthetic pretraining (525k imgs, 35k fingers) | **agreement needed** | 2026-09-10: signed agreement to Steven Grosz (MSU) — not paperwork-free | Engelsma, Grosz & Jain (MSU) |
 | L3-SF | Level-3 detail (pores, scratches) | **manifested** | 2026-09-10: 8,140 imgs, 569 MB; 740 with TSV pore coords. CC BY-NC-SA 4.0 | Wyzykowski et al. |
 | Anguli | Unlimited paired synthesis | **downloaded** | 2026-09-10: Win binary + Qt source in `data/external/anguli/` | Open-source SFinGe reimplementation; generated ChaLearn |
+| FVS | Small extra real set | **manifested** | 2026-09-10: 168 imgs (21 fingers × 8), 256×256, dpi unstated | `fvs.sourceforge.net`. Expired TLS cert — fetch with curl, not urllib |
 
 ## Tier 1 — Licensed, start the paperwork now (long lead time)
 
@@ -36,7 +37,7 @@ split files are versioned.
 | **MUST** | Minutiae + mask ground truth (enables F1) | not started | — | Same IAB route. ~21k impressions, manually marked minutiae, PPI, semantic masks. |
 | **NIST SD302 (N2N)** | Multi-sensor real capture | not started | — | `nigos.nist.gov/datasets/sd302/request`. Institutional email; manual NIST review. |
 | **NIST SD300** | Naturally poor / uncooperative captures | not started | — | Request form. 888 subjects × 10 fingers, ink cards. |
-| **CASIA-FingerprintV5** | Free substitute for worn population (workers, waiters) | not started | — | `idealtest.org`, registration. Site availability historically unreliable — try early. |
+| **CASIA-FingerprintV5** | Free substitute for worn population (workers, waiters) | **needs registration** | 2026-09-10: free account at idealtest.org | `idealtest.org`, registration. Site availability historically unreliable — try early. |
 | IIITD MSLFD | Surface-variation latents | not started | — | IAB route; low priority |
 | LFIW | Post-SD27 latent replacement | not started | — | Request; low priority |
 
