@@ -31,6 +31,8 @@ holds every citation.
    drove the pagefile past 20 GB and crashed the terminal, Pylance and the git credential
    helper. `data/` holds ~200,000 files; never let a tool index or watch it
    (see `.vscode/settings.json`, and do not remove those excludes).
+   **Write everything heavy to E:, never C:** — C: has ~16 GB free and carries the pagefile,
+   E: has ~470 GB. See `docs/environment-tuning.md`.
 7. **Worn prints, not latents.** Latent (crime-scene) enhancement is out of scope. Any
    latent-only experiment requires an ADR justifying it first.
 

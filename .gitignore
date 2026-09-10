@@ -65,3 +65,6 @@ desktop.ini
 # Local secrets / machine-specific paths
 .env
 configs/local.yaml
+
+# Local temp, kept off the C: drive (see docs/environment-tuning.md)
+/.tmp/

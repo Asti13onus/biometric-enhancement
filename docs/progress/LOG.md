@@ -6,6 +6,63 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-09-10 - Session 6: machine ran out of memory; corpus reconciled
+
+**What broke**
+- Pylance kept dying and the terminal kept crashing. Root cause measured, not guessed.
+  Two compounding causes:
+  1. **7.8 GB of RAM against ~211,000 workspace files** (`data/` alone is 196,000 --
+     SOCOFing extracts to 110k, Anguli's filter bank to 40k). VS Code's file watcher and
+     Pylance were indexing all of them.
+  2. **The pagefile lives on C:, which has 16.6 GB free while the pagefile is 24 GB
+     allocated and 21 GB in use.** Windows-managed, so it cannot grow. E: has 469 GB free
+     and is where every dataset already lives. The user spotted this.
+  The same exhaustion had already failed git's credential helper mid-push ("Not enough
+  memory resources") and kept killing the IDE MCP server.
+- Dropbox ruled out: it syncs only the user's Dropbox folder on C:, never the project on E:.
+
+**Fixed**
+- `.vscode/settings.json` -- excludes `data/`, `.venv/`, `vendor/`, `tools/bin/` from
+  `files.watcherExclude`, `python.analysis.exclude` and `search.exclude`; git
+  autorefresh/autofetch off (status walks are slow with 200k ignored files).
+  **These excludes are load-bearing; the file says so.**
+- Same file fixes a second Pylance complaint that was real rather than memory-related:
+  `python.analysis.extraPaths: ["src"]`, without which every `from fpe...` import reads as
+  unresolved, since the package lives in `src/` and scripts add it to `sys.path` at runtime.
+  Interpreter pinned to `.venv`.
+- Constraint recorded in `PROJECT_RULES.md` (new non-negotiable 6) and `STRATEGY.md` 2.3, with the
+  risk-register row marked **materialised**: cap generation at 4 threads while the editor is
+  open, dataloader workers 0-2, stream rather than bulk-load.
+- `docs/environment-tuning.md` -- the pagefile move to E: (needs admin + reboot) and
+  redirecting temp off C:.
+
+**Corpus: interrupted, reconciled, renamed**
+- The 20,000-finger run died with the session at **5,584 complete fingers**. One finger
+  (`fp_6/5745`) was torn -- master and Impression_1 written, Impression_2/3 and metadata not.
+  Training on that would silently pair a clean image against a missing counterpart.
+- `scripts/reconcile_anguli.py` intersects the finger ids present across Fingerprints /
+  every Impression_N / Meta Info, reports and optionally prunes torn records, and writes the
+  `generation.json` provenance the killed run never wrote (`partial_run: true`).
+  Interrupted runs will happen again on this machine.
+- Renamed `anguli_20k` -> **`anguli_dev_5584`**, because a directory called 20k holding
+  5,584 fingers is a trap for anyone reading it in month eight. Usable: **5,584 fingers,
+  22,336 images, 3 impressions each.**
+
+**Judgement**
+- Not resuming to 20,000 for now. SNFEN was trained on 360 images and beats FingerGAN's
+  130,000, so 5,584 paired fingers is ample for every Phase 1 baseline. Scaling up is one
+  4-thread overnight run *if* a measurement shows it is needed.
+
+**Next**
+- **Reload the VS Code window** so the excludes take effect (read at window start).
+- Move the pagefile to E: per `docs/environment-tuning.md` -- needs admin and a reboot.
+- Install NFIQ 2 + NBIS to close the Phase 0 gate.
+- Still the critical path, still not started: IAB licence (Registrar's signature) and
+  NIST SD302. Drafts ready in `docs/correspondence/`.
+- CASIA registration outstanding; walkthrough in `docs/datasets/casia-access.md`.
+
+---
+
 ## 2026-09-10 — Session 5: ChaLearn dead, baseline arm built here instead
 
 **Blocked, permanently**
