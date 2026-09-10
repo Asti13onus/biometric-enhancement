@@ -91,29 +91,44 @@ is real rather than memory-driven: the package lives in `src/fpe` and scripts ad
 
 ---
 
-## 3. Keep temp files off C:
+## 3. Keep temp files off C: — **done 2026-09-10**
 
-`TEMP` defaults to `C:\Users\<user>\AppData\Local\Temp`, on the drive with 16.6 GB free.
-Our own heavy paths already write to E: — downloads land in `data/raw/_archives/`, generated
-corpora in `data/processed/` — but third-party tools (pip, matplotlib font cache, unzip
-staging) still use `TEMP`.
+Policy for this project: **write to E: unless something compels C:.** C: carries the
+pagefile and has the least room; E: has ~470 GB and already holds the datasets, the
+virtualenv and every generated corpus.
 
-For one shell session:
+Applied as User-scope environment variables (no admin needed; effective in new processes):
+
+| Variable | Value |
+|---|---|
+| `TEMP` | `E:\localtemp` |
+| `TMP` | `E:\localtemp` |
+| `PIP_CACHE_DIR` | `E:\localcache\pip` |
+
+Both targets sit outside the repo, so temp files never show up in `git status`.
+
+Also reclaimed: `python -m pip cache purge` removed **4.4 GB** (1,190 files) of wheel cache
+from the pip directory under `AppData\Local`. C: went from 16.5 GB to **20.6 GB** free. That
+cache is purely re-downloadable, and future pip runs write to E: instead.
+
+To revert:
 
 ```powershell
-$env:TEMP = 'E:\biometric-enhancement\.tmp'; $env:TMP = $env:TEMP
-New-Item -ItemType Directory -Force $env:TEMP | Out-Null
+[Environment]::SetEnvironmentVariable('TEMP', "$env:LOCALAPPDATA\Temp", 'User')
+[Environment]::SetEnvironmentVariable('TMP',  "$env:LOCALAPPDATA\Temp", 'User')
+[Environment]::SetEnvironmentVariable('PIP_CACHE_DIR', $null, 'User')
 ```
 
-Permanently, for your user account (no admin needed; takes effect in new processes):
+### Still on C:, and worth knowing
 
-```powershell
-[Environment]::SetEnvironmentVariable('TEMP', 'E:\localtemp', 'User')
-[Environment]::SetEnvironmentVariable('TMP',  'E:\localtemp', 'User')
-```
+| Item | Size | Note |
+|---|---|---|
+| `Downloads` | **96 GB** | **The single biggest consumer on the drive.** Personal data, so untouched. Windows can relocate it properly: right-click Downloads → Properties → **Location** → Move… → an E: path. That moves the contents and repoints every app that writes there. |
+| `AppData\Local\CrashDumps` | 0.18 GB | Safe to clear by hand; a tooling guard blocks automated deletion under `AppData`. |
+| the IDE scratchpad | small | Lives under the old `TEMP`. New sessions use `E:\localtemp` now the variable is set. |
 
-`.tmp/` is gitignored. Prefer a path outside the repo (`E:\localtemp`) for the permanent
-setting, so temp files never appear in `git status`.
+Moving Downloads plus the pagefile would take C: from ~20 GB free to well over 100 GB, at
+which point none of this is a constraint any more.
 
 ---
 
