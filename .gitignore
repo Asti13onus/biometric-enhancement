@@ -1,0 +1,67 @@
+# ============================================================
+# DATA — never commit fingerprint images. Licensed datasets
+# (IAB, NIST, CASIA, FVC-A, LivDet) may NOT be redistributed.
+# Only manifests, checksums and split files belong in git.
+# ============================================================
+data/
+datasets/
+*.tif
+*.tiff
+*.bmp
+*.wsq
+*.png
+*.jpg
+*.jpeg
+!docs/**/*.png
+!results/figures/**/*.png
+!paper/**/*.pdf
+
+# Model weights / large artifacts
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.keras
+*.onnx
+checkpoints/
+runs/
+wandb/
+mlruns/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.ruff_cache/
+.mypy_cache/
+
+# Third-party binaries (NBIS, NFIQ2)
+vendor/
+tools/bin/
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# LaTeX
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.synctex.gz
+*.toc
+*.fls
+*.fdb_latexmk
+
+# Local secrets / machine-specific paths
+.env
+configs/local.yaml

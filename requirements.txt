@@ -1,0 +1,16 @@
+numpy>=1.26
+scipy>=1.11
+opencv-python>=4.9
+scikit-image>=0.22
+scikit-learn>=1.4
+pandas>=2.2
+matplotlib>=3.8
+pyyaml>=6.0
+tqdm>=4.66
+
+# Deep learning (PyTorch for our models; install the CUDA build for the GTX 1650)
+# torch / torchvision -- see https://pytorch.org for the correct index URL
+
+# Dev
+pytest>=8.0
+ruff>=0.4
