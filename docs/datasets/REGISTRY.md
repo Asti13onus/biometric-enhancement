@@ -62,7 +62,7 @@ split files are versioned.
 | Tool | Purpose | Status | Notes |
 |---|---|---|---|
 | NFIQ 2 | ISO/IEC 29794-4 quality score (0–100) | **installed & verified** | `tools/bin/nfiq2.exe`. Scores FVC2004 DB1_B correctly (2026-09-10). Note: prints the bare score, and `-F` suppresses the y/n prompt |
-| NBIS (`mindtct`, `bozorth3`) | Free minutiae extractor + matcher — baseline matcher #1 | not installed — **no compiler on this machine** | NIST Biometric Image Software. No gcc/cmake/MSVC present; WSL2 Ubuntu exists but its VHDX lives on the nearly-full C:. Provision a portable MinGW-w64 + CMake to E: and build natively. |
+| NBIS (`mindtct`, `bozorth3`) | Free minutiae extractor + matcher — baseline matcher #1 | **built & verified** | Built from NIST source 5.0.0 with portable MinGW-w64 GCC 16.2 on E:. Four patches required — see `docs/nbis-build.md`. Staged in `tools/bin/`. Verified: FVC2004 DB1_B EER 0.1142, CrossMatch EER 0.0066. **mindtct cannot read TIFF/BMP/PNG** — images go through lossless JPEG (`cjpegl`), round-trip verified byte-identical. |
 | SourceAFIS | Independent matcher #2 | not installed | Two independent matchers is a protocol requirement |
 | pyfing | Cappelli's segmentation / orientation / frequency / GBFEN / SNFEN — strongest baseline **and** best starting codebase | not installed — **backend resolved** | `github.com/raffaele-cappelli/pyfing`. Backend verified 2026-09-10: **Keras 3**, not raw TF → runnable on the **PyTorch backend** (`KERAS_BACKEND=torch`), so the TF-2.10 Windows-GPU dead end is avoidable and WSL2 is not needed. Also ships **LEADER**, an end-to-end minutiae extractor. |
 | CVxTz/fingerprint_denoising | ChaLearn-winning U-Net — trivial baseline | not installed | |
