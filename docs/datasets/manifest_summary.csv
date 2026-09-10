@@ -1,0 +1,10 @@
+dataset,images,megabytes,distinct_sizes,size_range,declared_dpi,subjects,greyscale_pct
+fvc2000,320,38.1,4,240x320 to 448x478,500,,100.0
+fvc2002,320,41.1,4,300x300 to 296x560,500/569,,100.0
+fvc2004,320,54.7,4,288x384 to 640x480,500/512,,100.0
+fvs,168,33.0,1,256x256,unstated,,0.0
+l3sf,8140,569.3,2,320x240 to 512x512,1200,,0.0
+minex,801,114.4,788,167x325 to 406x662,500,54,0.0
+neurotech_crossmatch,408,39.3,1,504x480,500,,0.0
+neurotech_uareu,520,62.2,1,326x357,512,,0.0
+socofing,55270,810.6,2,96x103 to 241x298,500,600,89.1

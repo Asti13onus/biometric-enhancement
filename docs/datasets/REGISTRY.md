@@ -1,6 +1,11 @@
 # Dataset Registry
 
-Single source of truth for dataset access. Update the **Status** and **Last action** columns
+Single source of truth for dataset **access status**. The narrative companion — links,
+descriptions, measured contents, quality assessment, literature usage and suitability
+analysis — is `docs/datasets/DATASET_DOSSIER.md` (rendered to PDF by
+`scripts/render_pdf.py`). Keep the two consistent.
+
+Update the **Status** and **Last action** columns
 every time anything happens — this table is what tells us whether the critical path is clear.
 
 Status values: `not started` · `requested <date>` · `chasing` · `granted` · `downloaded` ·
@@ -56,9 +61,9 @@ split files are versioned.
 
 | Tool | Purpose | Status | Notes |
 |---|---|---|---|
-| NFIQ 2 | ISO/IEC 29794-4 quality score (0–100) | not installed | `github.com/usnistgov/NFIQ2`, prebuilt binaries |
-| NBIS (`mindtct`, `bozorth3`) | Free minutiae extractor + matcher — baseline matcher #1 | not installed | NIST Biometric Image Software |
+| NFIQ 2 | ISO/IEC 29794-4 quality score (0–100) | **installed & verified** | `tools/bin/nfiq2.exe`. Scores FVC2004 DB1_B correctly (2026-09-10). Note: prints the bare score, and `-F` suppresses the y/n prompt |
+| NBIS (`mindtct`, `bozorth3`) | Free minutiae extractor + matcher — baseline matcher #1 | not installed — **no compiler on this machine** | NIST Biometric Image Software. No gcc/cmake/MSVC present; WSL2 Ubuntu exists but its VHDX lives on the nearly-full C:. Provision a portable MinGW-w64 + CMake to E: and build natively. |
 | SourceAFIS | Independent matcher #2 | not installed | Two independent matchers is a protocol requirement |
-| pyfing | Cappelli's segmentation / orientation / frequency / GBFEN / SNFEN — strongest baseline **and** best starting codebase | not installed | `github.com/raffaele-cappelli/pyfing`. **Verify its DL backend in Phase 0**: if TensorFlow, native Windows GPU support ended at TF 2.10 → use WSL2. |
+| pyfing | Cappelli's segmentation / orientation / frequency / GBFEN / SNFEN — strongest baseline **and** best starting codebase | not installed — **backend resolved** | `github.com/raffaele-cappelli/pyfing`. Backend verified 2026-09-10: **Keras 3**, not raw TF → runnable on the **PyTorch backend** (`KERAS_BACKEND=torch`), so the TF-2.10 Windows-GPU dead end is avoidable and WSL2 is not needed. Also ships **LEADER**, an end-to-end minutiae extractor. |
 | CVxTz/fingerprint_denoising | ChaLearn-winning U-Net — trivial baseline | not installed | |
 | MCC (Minutia Cylinder-Code) | Optional research matcher | not installed | SDK from Bologna, academic use |
