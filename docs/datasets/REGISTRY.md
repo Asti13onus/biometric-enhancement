@@ -16,16 +16,16 @@ split files are versioned.
 
 | Dataset | Role | Status | Last action | Notes |
 |---|---|---|---|---|
-| ChaLearn LAP Track 3 | Primary paired training set (84k pairs, 275×400) | not started | — | `chalearnlap.cvc.uab.cat/dataset/32/description/`. Its degradation is a *latent* model — that mismatch is our Gap 1. |
-| SOCOFing (+ Altered) | Damage severity benchmark | not started | — | Kaggle `ruizgara/socofing`. **Caveat:** declared 500 dpi but actually ~96×103 px at ~200 dpi. Rescale before feeding 500-dpi models; never compare NFIQ2 across resolutions. |
-| FVC2000/2002/2004 "B" subsets | Low-quality real test data | not started | — | `bias.csr.unibo.it/fvc2000/download.asp` (also fvc2002, fvc2004). 10 fingers × 8 per DB. FVC2004 DB1_B is the Phase 0 smoke-test set. |
-| Neurotechnology samples | Extra real prints | not started | — | CrossMatch 51×8, U.are.U 65×8. `neurotechnology.com/download.html#databases` |
-| MINEX validation imagery | Extra real prints, permissive licence | not started | — | GitHub `usnistgov/minex` |
+| ChaLearn LAP Track 3 | Primary paired training set (84k pairs, 275×400) | **needs account** | 2026-09-10: download is behind ChaLearn LAP site registration | `chalearnlap.cvc.uab.cat/dataset/32/description/`. Its degradation is a *latent* model — that mismatch is our Gap 1. |
+| SOCOFing (+ Altered) | Damage severity benchmark | **needs Kaggle token** | 2026-09-10 | Kaggle `ruizgara/socofing`. **Caveat:** declared 500 dpi but actually ~96×103 px at ~200 dpi. Rescale before feeding 500-dpi models; never compare NFIQ2 across resolutions. |
+| FVC2000/2002/2004 "B" subsets | Low-quality real test data | **manifested** | 2026-09-10: 960 imgs, 134 MB, all 12 DBs, dims match spec | `bias.csr.unibo.it/fvc2000/download.asp` (also fvc2002, fvc2004). 10 fingers × 8 per DB. FVC2004 DB1_B is the Phase 0 smoke-test set. |
+| Neurotechnology samples | Extra real prints | **manifested** | 2026-09-10: CrossMatch 408 + U.are.U 520 imgs, 102 MB | CrossMatch 51×8, U.are.U 65×8. `neurotechnology.com/download.html#databases` |
+| MINEX validation imagery | Extra real prints, permissive licence | **manifested** | 2026-09-10: 801 imgs, 114 MB, **+ per-image quality band and finger position** | GitHub `usnistgov/minex` |
 | Tsinghua SD27 annotations | Orientation / frequency / skeleton ground truth | not started | — | `ivg.au.tsinghua.edu.cn/dataset/NIST.php`. Useful even without SD27 images. |
 | FVC manual segmentation GT | Segmentation supervision | not started | — | Thai, Huckemann & Gottschlich, PLOS ONE 2016. What Cappelli trained on. |
-| PrintsGAN | Synthetic pretraining (525k imgs, 35k fingers) | not started | — | Engelsma, Grosz & Jain (MSU) |
-| L3-SF | Level-3 detail (pores, scratches) | not started | — | Wyzykowski et al. |
-| Anguli | Unlimited paired synthesis | not started | — | Open-source SFinGe reimplementation; generated ChaLearn |
+| PrintsGAN | Synthetic pretraining (525k imgs, 35k fingers) | **agreement needed** | 2026-09-10: signed agreement to Steven Grosz (MSU) — not paperwork-free | Engelsma, Grosz & Jain (MSU) |
+| L3-SF | Level-3 detail (pores, scratches) | **manifested** | 2026-09-10: 8,140 imgs, 569 MB; 740 with TSV pore coords. CC BY-NC-SA 4.0 | Wyzykowski et al. |
+| Anguli | Unlimited paired synthesis | **downloaded** | 2026-09-10: Win binary + Qt source in `data/external/anguli/` | Open-source SFinGe reimplementation; generated ChaLearn |
 
 ## Tier 1 — Licensed, start the paperwork now (long lead time)
 
