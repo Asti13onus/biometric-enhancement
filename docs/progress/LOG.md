@@ -6,6 +6,48 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-09-10 — Session 4: ChaLearn blocked, contingency armed and verified
+
+**Blocked**
+- **ChaLearn registration is broken on their side.** Sign-up returns HTTP 500; retrying the
+  same address then reports the email is not unique. Several addresses tried, all identical.
+  That is the classic Django failure where the user row commits before a failing
+  confirmation-email step raises — so the accounts probably exist but are unusable.
+  File lists are login-gated, so the archive URLs cannot be discovered anonymously.
+
+**Done**
+- Diagnosed the failure and identified two self-service recovery routes for the user:
+  log in with the **username** (the form field is `username`, not email) from the attempt
+  that errored, or use the working reset page at `/password_reset/`.
+- Drafted the access request to Sergio Escalera: `docs/correspondence/chalearn-data-access.md`.
+- **Armed and verified the regeneration contingency** (ADR 0003). Anguli produces
+  **275×400 8-bit greyscale — exactly ChaLearn's geometry**, confirming ChaLearn was built
+  with it at defaults. Wrote `scripts/generate_anguli.py` with a `chalearn-like` preset
+  mapping the published artefact list onto Anguli's noise/scratch/rotation/translation flags.
+- Measured throughput: **1.41 fingers/sec, 4.2 images/sec on 8 threads.** A ChaLearn-equivalent
+  84,000-pair corpus is a **~17 h overnight run**; a 20,000-pair dev corpus ~4 h. Generation
+  is not a bottleneck. (The apparent slowness of a 4-finger test was startup overhead.)
+
+**Findings worth keeping**
+- Regeneration is in three ways *better* than the download: seeded and provenance-recorded
+  (`generation.json` beside the output), **multiple impressions per finger** (`-ni`) which
+  Contribution 4 needs and ChaLearn does not provide, and pattern-class labels (`-meta` gives
+  class plus singular-point coordinates) — a free stratification axis.
+  The cost is real though: exact numerical comparability with published ChaLearn numbers is
+  lost, and the evaluation chapter must say so.
+- Three Anguli traps, none documented upstream: it resolves `Filterbank/` and `Densitymaps/`
+  relative to the **cwd**, not the executable (`Error: Not able to load Filter Bank`
+  otherwise); its **default image type is jpg**, whose compression would corrupt ridge detail;
+  and it will not create its own output directory. All three handled in the wrapper.
+
+**Next**
+- User: try the two ChaLearn recovery routes; send the Escalera email; CASIA registration.
+- Deadline: if ChaLearn is not resolved by end of Phase 1 (week 8), ADR 0003 triggers.
+- Group C emails still to draft: PrintsGAN, Tsinghua SD27 annotations, FVC segmentation GT.
+- IAB licence (Registrar's signature) and NIST SD302 — still the critical path, still not started.
+
+---
+
 ## 2026-09-10 — Session 3: SOCOFing in, Group B access mapped
 
 **Done**

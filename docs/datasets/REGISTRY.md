@@ -16,7 +16,7 @@ split files are versioned.
 
 | Dataset | Role | Status | Last action | Notes |
 |---|---|---|---|---|
-| ChaLearn LAP Track 3 | Primary paired training set (84k pairs, 275×400) | **needs account** | 2026-09-10: file lists confirmed login-gated at `/dataset/32/data/{55,56,57}/files/` | `chalearnlap.cvc.uab.cat/dataset/32/description/`. Its degradation is a *latent* model — that mismatch is our Gap 1. |
+| ChaLearn LAP Track 3 | Primary paired training set (84k pairs, 275×400) | **blocked — registration broken** | 2026-09-10: sign-up returns HTTP 500, retry says email not unique; several addresses tried. Contingency armed: ADR 0003 | `chalearnlap.cvc.uab.cat/dataset/32/description/`. Its degradation is a *latent* model — that mismatch is our Gap 1. |
 | SOCOFing (+ Altered) | Damage severity benchmark | **manifested** | 2026-09-10: 55,270 imgs, 811 MB; full gender x hand x finger x damage-type x severity labels | Kaggle `ruizgara/socofing`. **Caveat:** declared 500 dpi but actually ~96×103 px at ~200 dpi. Rescale before feeding 500-dpi models; never compare NFIQ2 across resolutions. |
 | FVC2000/2002/2004 "B" subsets | Low-quality real test data | **manifested** | 2026-09-10: 960 imgs, 134 MB, all 12 DBs, dims match spec | `bias.csr.unibo.it/fvc2000/download.asp` (also fvc2002, fvc2004). 10 fingers × 8 per DB. FVC2004 DB1_B is the Phase 0 smoke-test set. |
 | Neurotechnology samples | Extra real prints | **manifested** | 2026-09-10: CrossMatch 408 + U.are.U 520 imgs, 102 MB | CrossMatch 51×8, U.are.U 65×8. `neurotechnology.com/download.html#databases` |
@@ -25,7 +25,7 @@ split files are versioned.
 | FVC manual segmentation GT | Segmentation supervision | not started | — | Thai, Huckemann & Gottschlich, PLOS ONE 2016. What Cappelli trained on. |
 | PrintsGAN | Synthetic pretraining (525k imgs, 35k fingers) | **agreement needed** | 2026-09-10: signed agreement to Steven Grosz (MSU) — not paperwork-free | Engelsma, Grosz & Jain (MSU) |
 | L3-SF | Level-3 detail (pores, scratches) | **manifested** | 2026-09-10: 8,140 imgs, 569 MB; 740 with TSV pore coords. CC BY-NC-SA 4.0 | Wyzykowski et al. |
-| Anguli | Unlimited paired synthesis | **downloaded** | 2026-09-10: Win binary + Qt source in `data/external/anguli/` | Open-source SFinGe reimplementation; generated ChaLearn |
+| Anguli | Unlimited paired synthesis **+ ChaLearn substitute** | **verified working** | 2026-09-10: generates 275×400 (= ChaLearn geometry) at 1.41 fingers/sec; 84k pairs ≈ 17 h | Win binary + Qt source in `data/external/anguli/`. Wrapper: `scripts/generate_anguli.py`. Must run with its install dir as cwd; default jpg output is lossy — force png |
 | FVS | Small extra real set | **manifested** | 2026-09-10: 168 imgs (21 fingers × 8), 256×256, dpi unstated | `fvs.sourceforge.net`. Expired TLS cert — fetch with curl, not urllib |
 
 ## Tier 1 — Licensed, start the paperwork now (long lead time)
