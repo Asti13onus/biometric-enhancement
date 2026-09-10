@@ -1,7 +1,7 @@
 # ADR 0003 — Contingency for inaccessible ChaLearn data: regenerate with Anguli
 
 - **Date:** 2026-09-10
-- **Status:** accepted (contingency armed, not yet triggered)
+- **Status:** accepted — **triggered 2026-09-10**
 
 ## Context
 
@@ -33,6 +33,11 @@ Three paths, pursued in parallel rather than in sequence:
 If path 1 or 2 succeeds we use the original data and report it. If neither has resolved by
 the **end of Phase 1 (week 8)**, path 3 becomes the baseline arm and the thesis states so
 explicitly.
+
+**Triggered 2026-09-10.** Path 1 was exhausted the same day: login, password reset and
+repeated sign-up all failed. Path 2 (the email) remains outstanding and may still recover
+the original data, in which case we report both. Path 3 is now the working baseline arm, so
+Phase 1 is not waiting on it.
 
 ## Why regeneration is a genuine substitute
 
@@ -69,6 +74,17 @@ Regeneration also gives us three things the download does not:
   it is the degradation model the thesis argues is wrong for worn fingerprints.
 - Anguli is needed regardless, as the source of clean masters the wear-degradation model is
   applied to. This decision only changes whether it also supplies the baseline arm.
+- ChaLearn published artefact *types* but not their parameter distributions, so the severity
+  ranges in `LatentConfig` are our own, chosen to span visually comparable degradation. This
+  compounds the loss of exact comparability already noted above and must be stated in the
+  evaluation chapter.
+- Background textures come from the **Describable Textures Dataset** (5,640 images, 47
+  categories), the same source Kriangkhajorn et al. used for SFP. This answers Cappelli's
+  leakage criticism structurally rather than procedurally: the textures were never
+  fingerprints, so no fingerprint test image can leak through them, and DTD is partitioned
+  **by category** across train/val/test by a filename hash, so a training image cannot
+  receive a texture from the same family as a test one. Measured partition: 35/8/4
+  categories = 4,200/960/480 textures, verified disjoint at both category and file level.
 
 ## Operational notes discovered while verifying
 

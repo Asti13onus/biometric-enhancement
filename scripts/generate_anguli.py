@@ -25,7 +25,7 @@ Output layout, paired by construction:
 
 Usage:
     python scripts/generate_anguli.py --num 200 --impressions 3 --out data/processed/anguli_dev
-    python scripts/generate_anguli.py --num 5 --preset chalearn-like --out /tmp/smoke
+    python scripts/generate_anguli.py --num 5 --preset clean --out /tmp/smoke
 """
 
 from __future__ import annotations
@@ -40,16 +40,32 @@ ROOT = Path(__file__).resolve().parents[1]
 ANGULI_DIR = ROOT / "data" / "external" / "anguli" / "Anguli-MSVC"
 ANGULI_EXE = ANGULI_DIR / "Anguli.exe"
 
-# Degradation presets. "clean" leaves the impression model as the only difference
-# between impressions; "chalearn-like" approximates the artefact mix the ChaLearn
-# set was built with (blur/noise/scratches/rotation/translation).
+# Anguli's own degradation flags. These are deliberately NOT used to build the
+# baseline arm.
 #
-# NOTE: this is a *latent-print* degradation model. It is the baseline arm the thesis
-# argues against, not the wear model -- see STRATEGY.md section 1.
+# ChaLearn's published recipe applies nine artefact types -- blur, brightness,
+# contrast, elastic transformation, occlusion, scratches, resolution reduction,
+# rotation, and compositing onto background textures. Anguli's flags cover roughly
+# four of them (noise/blur, scratches, rotation, translation) and cannot composite
+# backgrounds at all. Naming a preset "chalearn-like" would therefore overstate what
+# it produces.
+#
+# So the division of labour is:
+#   Anguli (here)                 clean masters + acquisition variation across
+#                                 impressions of the same finger
+#   fpe.degradation.latent        the full documented ChaLearn artefact list, in our
+#                                 own code, applied to those masters
+#
+# Keeping all degradation in one auditable place matters more than usual here: the
+# thesis's central claim is about degradation models, so "what exactly was applied"
+# has to be inspectable rather than split across a closed binary and a script.
 PRESETS: dict[str, dict[str, str]] = {
+    # Preferred for corpus generation: impressions differ only by Anguli's own
+    # contact/elastic model, so every artefact is added downstream by our code.
     "clean": {},
-    "chalearn-like": {"noise": "2 6", "scratch": "3 12", "rot": "15", "trans": "10"},
-    "severe": {"noise": "5 8", "scratch": "8 20", "rot": "25", "trans": "15"},
+    # Anguli-side noise, for ablations that need it.
+    "anguli-noise": {"noise": "2 6", "scratch": "3 12", "rot": "15", "trans": "10"},
+    "anguli-severe": {"noise": "5 8", "scratch": "8 20", "rot": "25", "trans": "15"},
 }
 
 
@@ -83,7 +99,7 @@ def main() -> int:
     ap.add_argument("--out", required=True, help="output directory")
     ap.add_argument("--seed", type=int, default=42, help="random seed (reproducibility)")
     ap.add_argument("--threads", type=int, default=4)
-    ap.add_argument("--preset", choices=sorted(PRESETS), default="chalearn-like")
+    ap.add_argument("--preset", choices=sorted(PRESETS), default="clean")
     ap.add_argument("--itype", default="png",
                     help="image type; keep png -- jpg is lossy and corrupts ridge detail")
     ap.add_argument("--cdist", help="pattern class distribution: natural, arch, tarch, "
@@ -128,7 +144,7 @@ def main() -> int:
         "num_fingers": args.num, "impressions_per_finger": args.impressions,
         "clean_images": len(clean),
         "degraded_images": {k: len(v) for k, v in impressions.items()},
-        "note": "latent-style degradation (baseline arm), not the wear model",
+        "note": "Anguli-side generation only; artefacts are applied downstream by fpe.degradation",
     }, indent=2))
     print(f"\nwrote {(out / 'generation.json')}")
     return 0
