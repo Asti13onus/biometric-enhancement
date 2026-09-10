@@ -25,7 +25,13 @@ holds every citation.
 5. **Parameter budget:** <= 10M parameters, <= 500 ms CPU inference, <= 4 GB training
    footprint (target GPU is a GTX 1650, 4 GB). Edge deployability is a stated design goal,
    not a limitation.
-6. **Worn prints, not latents.** Latent (crime-scene) enhancement is out of scope. Any
+6. **This machine has 7.8 GB of RAM.** That is the binding constraint more often than the
+   GPU. Keep dataloader workers low (0-2), avoid loading whole datasets into memory, and do
+   not run generation with more than 4 threads while working in the editor -- 8 threads
+   drove the pagefile past 20 GB and crashed the terminal, Pylance and the git credential
+   helper. `data/` holds ~200,000 files; never let a tool index or watch it
+   (see `.vscode/settings.json`, and do not remove those excludes).
+7. **Worn prints, not latents.** Latent (crime-scene) enhancement is out of scope. Any
    latent-only experiment requires an ADR justifying it first.
 
 ## Working conventions
@@ -44,6 +50,9 @@ holds every citation.
 - Windows 11, PowerShell primary; Bash tool available.
 - Python 3.11 (`C:\Users\91807\AppData\Local\Programs\Python\Python311`), no conda.
 - GPU: NVIDIA GTX 1650, 4 GB. Use PyTorch for our own models.
+- **RAM: 7.8 GB total.** Frequently the real limit. Pagefile has peaked above 20 GB under
+  load; when that happens Windows starts failing unrelated operations (git credential
+  helper, IDE language server, terminal).
 - TensorFlow dropped native Windows GPU support after 2.10 — if `pyfing` requires TF-GPU,
   run it under WSL2 rather than fighting the native install.
 - External binaries (NFIQ 2, NBIS) go in `tools/bin/` or `vendor/`, both gitignored.

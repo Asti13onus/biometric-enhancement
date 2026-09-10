@@ -94,11 +94,18 @@ arrives, it is the headline external validation. If it does not, the thesis stil
 
 ### 2.3 Treat the hardware constraint as a design goal, not a limitation
 
-Available GPU: **GTX 1650, 4 GB**. Cappelli's SNFEN is 4.9M parameters and trains in 25
-minutes on a 3080 Ti — comfortably reachable here (expect roughly 2–3 h). A GAN or diffusion
-model is not. This is convenient: the literature already concludes that small,
-domain-knowledge-conditioned models win, and "runs on the hardware that actually exists in a
-village PoS device" is a stronger thesis conclusion than a 0.3% EER delta on an A100.
+Available hardware: **GTX 1650, 4 GB VRAM — and only 7.8 GB of system RAM.** Cappelli's
+SNFEN is 4.9M parameters and trains in 25 minutes on a 3080 Ti — comfortably reachable here
+(expect roughly 2–3 h). A GAN or diffusion model is not. This is convenient: the literature
+already concludes that small, domain-knowledge-conditioned models win, and "runs on the
+hardware that actually exists in a village PoS device" is a stronger thesis conclusion than a
+0.3% EER delta on an A100.
+
+**System RAM turns out to bind more often than VRAM.** Measured 2026-09-10: an 8-thread
+generation run alongside the editor drove the pagefile past 20 GB and took down the terminal,
+the language server and git's credential helper. Consequences, now written into `PROJECT_RULES.md`:
+cap generation at 4 threads while working, keep dataloader workers at 0–2, stream datasets
+rather than loading them, and never let a tool index or watch `data/` (~200,000 files).
 
 Hard budget: **<= 10M parameters, <= 500 ms CPU inference, <= 4 GB training footprint.**
 Written into every model config, reported in every results table.
@@ -184,6 +191,7 @@ to compare against.
 | Cannot beat SNFEN on EER | Medium-high | Comparison-study framing (§1); precision-at-coverage is a different axis | End of week 20 → freeze the model, pivot effort to Contribution 4 (fusion) |
 | WDM realism unconvincing (domain classifier well above chance) | Medium | Report it honestly; a *measured* realism failure is a finding, and the three-way comparison survives | Week 13 |
 | 4 GB GPU insufficient | Low | Parameter budget (§2.3); 256×256 patches, mixed precision, gradient accumulation | Any config that OOMs is out of scope by definition |
+| **7.8 GB system RAM exhausted** | **Materialised 2026-09-10** | Editor excludes for `data/` (`.vscode/settings.json`); ≤4 generation threads; workers 0–2; stream, never bulk-load | Terminal or language server crashing is the signal — check pagefile peak first |
 | Windows toolchain friction (NBIS, TF-GPU) | Medium | Verify in Phase 0. Note: TensorFlow dropped native Windows GPU support after 2.10 — if pyfing needs TF-GPU, use WSL2. Our own models: PyTorch. | Week 1 |
 | Scope creep into latent fingerprints | High | ADR required before any latent-only experiment. Latents are where the papers are; that is exactly the trap. | Every planning session |
 | Numbers lost or unreproducible | Certain without process | §2.5 registry; nothing is reported that a script did not produce | — |
