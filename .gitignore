@@ -3,8 +3,8 @@
 # (IAB, NIST, CASIA, FVC-A, LivDet) may NOT be redistributed.
 # Only manifests, checksums and split files belong in git.
 # ============================================================
-data/
-datasets/
+/data/
+/datasets/
 *.tif
 *.tiff
 *.bmp
