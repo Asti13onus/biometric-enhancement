@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import re
 import sys
 from pathlib import Path
 
@@ -36,6 +37,17 @@ MANIFESTS = ROOT / "docs" / "datasets" / "manifests"
 
 IMAGE_EXT = {".tif", ".tiff", ".bmp", ".png", ".jpg", ".jpeg", ".pgm"}
 
+# Paths (relative to data/raw/<dataset>/) to leave out of the manifest, with the reason.
+# Kept as an exclusion rather than a deletion so data/raw stays faithful to the archive
+# and re-running produces the same manifest on any machine.
+EXCLUDE: dict[str, list[tuple[str, str]]] = {
+    "socofing": [(
+        "SOCOFing/SOCOFing",
+        "the Kaggle upload nests a byte-identical second copy of the whole dataset; "
+        "counting it would double every per-class total",
+    )],
+}
+
 # Declared dpi, keyed by a prefix of "<dataset>/<relpath>"; longest match wins.
 # None means the source does not state it -- recorded as unknown, never guessed.
 DECLARED_DPI: dict[str, int | None] = {
@@ -45,6 +57,10 @@ DECLARED_DPI: dict[str, int | None] = {
     "neurotech_crossmatch": 500,
     "neurotech_uareu": 512,
     "fvs": None,
+    # SOCOFing declares 500 dpi but the images are ~96x103 px, i.e. roughly 200 dpi.
+    # Recorded as declared; the loader must rescale before any 500-dpi-trained model,
+    # and NFIQ 2 must never be compared across resolutions.
+    "socofing": 500,
     "minex": minex.MINEX_DPI,
     # The published 1200 dpi applies to the pore-annotated subset (740 imgs at 512x512).
     # The main 7,400-image set is 320x240, which cannot be 1200 dpi -- that would be a
@@ -56,7 +72,23 @@ DECLARED_DPI: dict[str, int | None] = {
 FIELDS = [
     "dataset", "relpath", "sha256", "bytes", "width", "height",
     "declared_dpi", "mode", "subject", "finger", "impression", "quality",
+    "gender", "severity",
 ]
+
+# SOCOFing encodes its labels in the filename:
+#   1__M_Left_index_finger.BMP          real
+#   1__M_Left_index_finger_Zcut.BMP     altered
+# giving subject, gender, hand, finger and alteration type -- and the parent directory
+# gives severity. That is the whole demographic x damage-type x severity grid the
+# stratified benchmark needs (literature review Gap 4), on free data.
+SOCOFING_NAME = re.compile(
+    r"^(?P<subject>\d+)__(?P<gender>[MF])_(?P<hand>Left|Right)_(?P<finger>\w+?)_finger"
+    r"(?:_(?P<alteration>CR|Obl|Zcut))?\.bmp$",
+    re.IGNORECASE,
+)
+SOCOFING_ALTERATION = {
+    "CR": "central_rotation", "Obl": "obliteration", "Zcut": "z_cut", None: "none",
+}
 
 
 def sha256_file(path: Path) -> str:
@@ -79,10 +111,22 @@ def declared_dpi_for(dataset: str, relpath: Path) -> int | None:
     return DECLARED_DPI.get(best) if best else None
 
 
+def excluded(dataset: str, rel: Path) -> bool:
+    posix = rel.as_posix()
+    return any(
+        posix == prefix or posix.startswith(prefix + "/")
+        for prefix, _ in EXCLUDE.get(dataset, [])
+    )
+
+
 def rows_for_images(dataset: str, root: Path) -> list[dict]:
     rows = []
+    for prefix, why in EXCLUDE.get(dataset, []):
+        print(f"  excluding {prefix}/ -- {why}")
     for path in sorted(p for p in root.rglob("*") if p.suffix.lower() in IMAGE_EXT):
         rel = path.relative_to(root)
+        if excluded(dataset, rel):
+            continue
         try:
             with Image.open(path) as im:
                 width, height, mode = im.width, im.height, im.mode
@@ -90,13 +134,36 @@ def rows_for_images(dataset: str, root: Path) -> list[dict]:
             print(f"  !! unreadable: {rel} ({exc})")
             width = height = None
             mode = ""
-        rows.append({
+        row = {
             "dataset": dataset, "relpath": rel.as_posix(), "sha256": sha256_file(path),
             "bytes": path.stat().st_size, "width": width, "height": height,
             "declared_dpi": declared_dpi_for(dataset, rel), "mode": mode,
             "subject": "", "finger": "", "impression": "", "quality": "",
-        })
+            "gender": "", "severity": "",
+        }
+        if dataset == "socofing":
+            row.update(socofing_labels(rel))
+        rows.append(row)
     return rows
+
+
+def socofing_labels(rel: Path) -> dict:
+    """Pull subject, gender, hand, finger, alteration type and severity out of the path."""
+    m = SOCOFING_NAME.match(rel.name)
+    if not m:
+        return {}
+    parts = rel.as_posix().split("/")
+    severity = ""
+    for part in parts:
+        if part.startswith("Altered-"):
+            severity = part.removeprefix("Altered-").lower()
+    return {
+        "subject": m["subject"],
+        "finger": f"{m['hand'].lower()}_{m['finger'].lower()}",
+        "impression": SOCOFING_ALTERATION[m["alteration"]],
+        "gender": m["gender"],
+        "severity": severity or "none",
+    }
 
 
 def rows_for_minex(dataset: str, root: Path) -> list[dict]:
@@ -120,6 +187,7 @@ def rows_for_minex(dataset: str, root: Path) -> list[dict]:
             "declared_dpi": minex.MINEX_DPI, "mode": "L(raw)",
             "subject": info.subject, "finger": info.finger,
             "impression": info.impression, "quality": info.quality,
+            "gender": "", "severity": "",
         })
     if missing:
         print(f"  !! {missing} .gray file(s) absent from the metadata header")

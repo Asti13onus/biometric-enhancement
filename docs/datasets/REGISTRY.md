@@ -16,8 +16,8 @@ split files are versioned.
 
 | Dataset | Role | Status | Last action | Notes |
 |---|---|---|---|---|
-| ChaLearn LAP Track 3 | Primary paired training set (84k pairs, 275×400) | **needs account** | 2026-09-10: download is behind ChaLearn LAP site registration | `chalearnlap.cvc.uab.cat/dataset/32/description/`. Its degradation is a *latent* model — that mismatch is our Gap 1. |
-| SOCOFing (+ Altered) | Damage severity benchmark | **needs Kaggle token** | 2026-09-10 | Kaggle `ruizgara/socofing`. **Caveat:** declared 500 dpi but actually ~96×103 px at ~200 dpi. Rescale before feeding 500-dpi models; never compare NFIQ2 across resolutions. |
+| ChaLearn LAP Track 3 | Primary paired training set (84k pairs, 275×400) | **needs account** | 2026-09-10: file lists confirmed login-gated at `/dataset/32/data/{55,56,57}/files/` | `chalearnlap.cvc.uab.cat/dataset/32/description/`. Its degradation is a *latent* model — that mismatch is our Gap 1. |
+| SOCOFing (+ Altered) | Damage severity benchmark | **manifested** | 2026-09-10: 55,270 imgs, 811 MB; full gender x hand x finger x damage-type x severity labels | Kaggle `ruizgara/socofing`. **Caveat:** declared 500 dpi but actually ~96×103 px at ~200 dpi. Rescale before feeding 500-dpi models; never compare NFIQ2 across resolutions. |
 | FVC2000/2002/2004 "B" subsets | Low-quality real test data | **manifested** | 2026-09-10: 960 imgs, 134 MB, all 12 DBs, dims match spec | `bias.csr.unibo.it/fvc2000/download.asp` (also fvc2002, fvc2004). 10 fingers × 8 per DB. FVC2004 DB1_B is the Phase 0 smoke-test set. |
 | Neurotechnology samples | Extra real prints | **manifested** | 2026-09-10: CrossMatch 408 + U.are.U 520 imgs, 102 MB | CrossMatch 51×8, U.are.U 65×8. `neurotechnology.com/download.html#databases` |
 | MINEX validation imagery | Extra real prints, permissive licence | **manifested** | 2026-09-10: 801 imgs, 114 MB, **+ per-image quality band and finger position** | GitHub `usnistgov/minex` |
@@ -37,7 +37,7 @@ split files are versioned.
 | **MUST** | Minutiae + mask ground truth (enables F1) | not started | — | Same IAB route. ~21k impressions, manually marked minutiae, PPI, semantic masks. |
 | **NIST SD302 (N2N)** | Multi-sensor real capture | not started | — | `nigos.nist.gov/datasets/sd302/request`. Institutional email; manual NIST review. |
 | **NIST SD300** | Naturally poor / uncooperative captures | not started | — | Request form. 888 subjects × 10 fingers, ink cards. |
-| **CASIA-FingerprintV5** | Free substitute for worn population (workers, waiters) | **needs registration** | 2026-09-10: free account at idealtest.org | `idealtest.org`, registration. Site availability historically unreliable — try early. |
+| **CASIA-FingerprintV5** | Free substitute for worn population (workers, waiters) | **needs registration** | 2026-09-10: idealtest.org is a JS portal with an expired TLS cert; browser download only | `idealtest.org`, registration. Site availability historically unreliable — try early. |
 | IIITD MSLFD | Surface-variation latents | not started | — | IAB route; low priority |
 | LFIW | Post-SD27 latent replacement | not started | — | Request; low priority |
 
