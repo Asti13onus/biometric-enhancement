@@ -6,6 +6,110 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-09-15 — Session 9: Phase B complete, GPU unblocked, canary passes
+
+**Where the plan stands**
+- **U1–U8 done.** Phase A (week 2) and Phase B (week 3) of the implementation plan are
+  complete. 183 tests. Branch `feat/wear-degradation-model`, `main` untouched.
+- Remaining: U9 (minutiae precision + precision–coverage curve), U10 (ablations),
+  U11 (paired bootstrap + LEADER), U12 (full benchmark).
+
+**The milestone: the wiring is proven**
+- The over-fit canary passes on real cached data — **ridge loss 0.1457** against a 0.35
+  threshold, in under a minute on the GPU. The whole chain (cached targets → augmentation →
+  wear degradation → five-headed network → five losses → optimiser) is correct end to end.
+  The same check took over an hour on CPU.
+
+**The GPU works — three separate blockers, three different causes**
+- torch 2.14 will not load: the x64 VC++ 2015-2022 runtime here is **14.32.31332** and
+  recent torch needs ≥14.40 (the *x86* redist is already 14.44; only x64 is stale).
+- The cu121 builds need driver ≥525; this machine has **517.48** (2022), which supports
+  CUDA 11.x only.
+- **torch 2.5.1+cu118 satisfies both** and reports CUDA available on the GTX 1650. No driver
+  update needed. Updating the x64 redist remains a deferred nice-to-have.
+
+**Two regressions that appeared because the project got *faster***
+- Installing CUDA torch broke pyfing everywhere — the supervision build *and* the
+  GBFEN/SNFEN baselines — without a line of our code changing. Keras places pyfing's models
+  on whatever device it finds and pyfing calls `.numpy()` straight on the output, which
+  fails on a CUDA tensor.
+- The first fix failed because **Keras resolves its torch device at *import* time** from
+  `KERAS_TORCH_DEVICE`, so no context manager entered after `import pyfing` can help.
+  `fpe.models.pyfing_runtime.load_pyfing()` now owns the import and sets the variable
+  first; every call site routes through it and no direct `import pyfing` remains. Pinning
+  pyfing to CPU is right regardless — teachers and baselines are cached one-offs at
+  ~0.7 s/image, and 4 GB of VRAM is wanted for training. Verified our own network still
+  runs on the GPU with pyfing pinned.
+- The parameter budget was checked *after* construction, so an absurd config exhausted
+  memory while building and surfaced as an allocation failure rather than the scope
+  decision it is. Now estimated from the config and refused before allocating.
+
+**U2 — supervision build**
+- Resumable by atomic rename: a cache file exists only once complete. Proven in practice —
+  the build was killed and relaunched mid-run and resumed at 442 without losing anything,
+  and it survived a session restart.
+- **The atomicity test paid for itself immediately**: `np.savez_compressed` *appends* `.npz`
+  to any path lacking it, so writing `x.npz.tmp` produced `x.npz.tmp.npz` and the rename
+  found nothing. Without that test the "resumable" build would have written zero files.
+- Splits by blake2b hash of the finger id, not the built-in `hash()` whose seed is
+  randomised per process. 4,418 / 560 / 606 fingers; no finger crosses a split.
+- **Two plan assumptions were wrong.** The identity parser did *not* handle the Anguli
+  layout (files are `5.png` with the impression in the *directory*), so every manifest row
+  parsed to `None` and would have been silently dropped. And the test split yields
+  **1,649,835 impostor pairs** — the better part of an hour per evaluation, and U9 sweeps
+  many. Added seeded impostor subsampling drawing uniformly over *pairs*, not finger pairs.
+
+**U3 — realism, measured**
+
+  | arm | KS vs real | NFIQ 2 | classifier accuracy |
+  |---|---|---|---|
+  | latent | 0.1593 | 45.1 | 0.823 [0.81, 0.83] |
+  | **wear** | **0.1313** | 53.9 | **0.708 [0.70, 0.72]** |
+  | real | — | 50.3 | — |
+
+- Wear is closer on both, intervals disjoint. Both remain well above chance, so neither
+  model is indistinguishable from real damage — reported as the limitation it is (AE4).
+- **The first design was worthless and was thrown away.** Degrading Anguli and classifying
+  against real degraded prints scores 0.95 — but the control, clean Anguli vs clean FVC with
+  *no degradation*, scores **1.000**. It measured the corpora, not the models. The rebuilt
+  version never crosses corpora: real prints split by measured NFIQ 2 quality *within each
+  sensor*, clean half degraded, tested against the genuinely degraded half.
+- Two guards came out of it. The cross-validated accuracy is biased *below* chance when
+  samples are few relative to features (30/class scored 0.317 on identical distributions),
+  and below-chance is the *flattering* direction — it now refuses rather than returning it.
+  And **NFIQ 2 silently fails on Neurotechnology's palette TIFFs**, which had dropped all
+  928 images from the pool without a word.
+
+**U5–U8 — the network**
+- **5,462,710 parameters** against the 10M budget. CPU inference **309 ms** at 256×256 and
+  **478 ms** at full Anguli resolution, against a 500 ms budget and the ~1,050 ms that
+  Cappelli's four-network chain costs here.
+- Orientation predicted as (cos 2t, sin 2t); ridge loss is Tversky α = 0.7. A test asserted
+  that adding 16 false pixels and erasing 16 true ones cost the same at α = 0.5 — they do
+  not, because erasing also reduces true positives. Replacing it exposed the sharper
+  property: **α = 0.7 must *reverse* which error is worse**, and it does.
+- Abstention writes background where confidence is low and drops minutiae landing there;
+  coverage is measured over the foreground so a tight crop cannot claim coverage for free.
+
+**Throughput**
+- Dataset was 239 ms/item, which would have starved the GPU. The wear model's oriented-noise
+  bank was a **91×91 kernel applied 8 times**; it now runs at 0.4 scale with correlation
+  lengths scaled to match. Wear 163 → 67 ms, dataset 239 → **101 ms**, epoch 11 → **5 min**.
+  Realism revalidated afterwards: unchanged.
+- The frequency teacher emits **negative ridge periods** where it could not estimate. Marked
+  invalid and excluded from the loss rather than clamped — clamping would invent a number
+  and train the network to reproduce it.
+
+**Running / next**
+- Supervision build detached at **~11,250/16,310**, ~70 min left. If it dies, just re-run
+  `.venv/Scripts/python.exe scripts/build_supervision.py` — it skips what is built.
+- **The training run has not been started.** ~5 min/epoch × 25 epochs ≈ 2 h on the GPU:
+  `.venv/Scripts/python.exe experiments/train_wafen.py --epochs 25`
+- Then U9: minutiae precision on Cappelli's protocol, and the precision–coverage curve.
+- Still unstarted, still longest lead time: CASIA registration, IAB licence paperwork.
+
+---
+
 ## 2026-09-11 — Session 8: baselines measured, plan written, wear model built
 
 **Baselines — the 2026 SOTA, run by us**
