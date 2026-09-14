@@ -31,6 +31,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Literal, Sequence
 
+import numpy as np
+
 __all__ = ["Impression", "parse_manifest", "build_pairs", "PairSet"]
 
 ImpostorMode = Literal["all", "first"]
@@ -64,12 +66,23 @@ class PairSet:
 _TWO_PART = re.compile(r"^(?P<finger>\w+?)_(?P<impr>\d+)$")
 # subject_finger_impression:  012_3_1.tif
 _THREE_PART = re.compile(r"^(?P<subject>\w+?)_(?P<finger>\d+)_(?P<impr>\d+)$")
+# Anguli puts the impression index in the *directory*, not the filename:
+#   Impression_2/fp_6/5758.png  ->  finger 5758, impression 2
+_ANGULI_DIR = re.compile(r"^Impression_(?P<impr>\d+)$")
 
 
 def _identity(dataset: str, relpath: str) -> tuple[str, str, str] | None:
     """(finger_id, impression, scope) for one manifest row, or None if unparseable."""
     p = Path(relpath)
     stem = p.stem
+
+    # Anguli: the impression index lives in the top directory, and the three
+    # impressions of one finger must resolve to the *same* finger id. All Anguli
+    # images come from one generator, so they share a single capture scope.
+    if len(p.parts) >= 3 and (m := _ANGULI_DIR.match(p.parts[0])):
+        bucket = p.parts[-2]
+        return f"{dataset}/{bucket}/{stem}", m["impr"], dataset
+
     # Scope by every directory above the file, so db1_b/101 != db2_b/101.
     scope = "/".join(p.parts[:-1])
     prefix = f"{dataset}/{scope}" if scope else dataset
@@ -122,11 +135,53 @@ def _by_finger(impressions: Iterable[Impression]) -> dict[str, list[Impression]]
     return groups
 
 
+def _subsample_impostors(
+    groups: dict[str, list[Impression]],
+    finger_pairs: list[tuple[str, str]],
+    limit: int,
+    rng: np.random.Generator,
+) -> list[tuple[Impression, Impression]]:
+    """Draw `limit` impostor pairs uniformly without materialising all of them.
+
+    A 606-finger test split with three impressions each yields 1.65M impostor pairs --
+    enough to make a single evaluation take the better part of an hour, and the abstention
+    sweep runs many evaluations. Subsampling does not bias the EER; it widens the interval
+    slightly at very low false-match rates, which is a trade worth making to get the sweep
+    down to minutes.
+
+    Sampling walks a virtual index over the full cross-product, so the draw is uniform over
+    every pair rather than uniform over finger pairs -- the latter would over-weight
+    fingers with fewer impressions.
+    """
+    sizes = np.array([len(groups[a]) * len(groups[b]) for a, b in finger_pairs])
+    offsets = np.concatenate([[0], np.cumsum(sizes)])
+    total = int(offsets[-1])
+    if total <= limit:
+        return [
+            (x, y) for a, b in finger_pairs
+            for x, y in itertools.product(groups[a], groups[b])
+        ]
+
+    picks = rng.choice(total, size=limit, replace=False)
+    picks.sort()
+    slots = np.searchsorted(offsets, picks, side="right") - 1
+
+    out: list[tuple[Impression, Impression]] = []
+    for flat, slot in zip(picks, slots):
+        a, b = finger_pairs[int(slot)]
+        within = int(flat - offsets[slot])
+        left, right = groups[a], groups[b]
+        out.append((left[within // len(right)], right[within % len(right)]))
+    return out
+
+
 def build_pairs(
     impressions: Sequence[Impression],
     *,
     impostor: ImpostorMode = "all",
     cross_scope: bool = False,
+    max_impostor: int | None = None,
+    seed: int = 0,
 ) -> PairSet:
     """All genuine pairs, plus impostor pairs per the chosen rule.
 
@@ -136,6 +191,10 @@ def build_pairs(
     have nothing to do with identity, and including them depresses the EER
     without the method having improved. Set `cross_scope=True` only for a
     deliberate cross-sensor experiment.
+
+    `max_impostor` caps the impostor set by seeded random subsampling. Leave it
+    unset for the small real datasets; set it for Anguli, where the full set runs
+    to millions of pairs.
     """
     groups = _by_finger(impressions)
     scope_of = {f: members[0].scope for f, members in groups.items()}
@@ -145,13 +204,25 @@ def build_pairs(
         genuine.extend(itertools.combinations(members, 2))
 
     fingers = sorted(groups)
-    impostor_pairs: list[tuple[Impression, Impression]] = []
-    for a, b in itertools.combinations(fingers, 2):
-        if not cross_scope and scope_of[a] != scope_of[b]:
-            continue
-        if impostor == "first":
-            impostor_pairs.append((groups[a][0], groups[b][0]))
-        else:
-            impostor_pairs.extend(itertools.product(groups[a], groups[b]))
+    eligible = [
+        (a, b) for a, b in itertools.combinations(fingers, 2)
+        if cross_scope or scope_of[a] == scope_of[b]
+    ]
+
+    if impostor == "first":
+        impostor_pairs = [(groups[a][0], groups[b][0]) for a, b in eligible]
+        if max_impostor is not None and len(impostor_pairs) > max_impostor:
+            rng = np.random.default_rng(seed)
+            keep = np.sort(rng.choice(len(impostor_pairs), max_impostor, replace=False))
+            impostor_pairs = [impostor_pairs[int(i)] for i in keep]
+    elif max_impostor is not None:
+        impostor_pairs = _subsample_impostors(
+            groups, eligible, max_impostor, np.random.default_rng(seed)
+        )
+    else:
+        impostor_pairs = [
+            (x, y) for a, b in eligible
+            for x, y in itertools.product(groups[a], groups[b])
+        ]
 
     return PairSet(genuine=genuine, impostor=impostor_pairs)
