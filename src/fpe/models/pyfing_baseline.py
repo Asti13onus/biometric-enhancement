@@ -105,9 +105,10 @@ class PyfingEnhancer:
         return out
 
     def _enhance(self, img: np.ndarray, torch) -> tuple[np.ndarray, np.ndarray | None]:
-        import pyfing as pf
+        from fpe.models.pyfing_runtime import load_pyfing, pyfing_cpu
 
-        with torch.no_grad():
+        pf = load_pyfing()
+        with pyfing_cpu():
             mask = pf.fingerprint_segmentation(img, dpi=self.dpi, method=self.segmentation)
             ori = pf.orientation_field_estimation(
                 img, mask, dpi=self.dpi, method=self.orientation

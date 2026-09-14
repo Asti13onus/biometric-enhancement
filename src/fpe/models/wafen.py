@@ -35,7 +35,8 @@ from dataclasses import asdict, dataclass
 import torch
 from torch import nn
 
-__all__ = ["WafenConfig", "Wafen", "WafenOutput", "decode_orientation"]
+__all__ = ["WafenConfig", "Wafen", "WafenOutput", "decode_orientation",
+           "estimate_parameters"]
 
 MAX_PARAMETERS = 10_000_000
 """Hard budget from the thesis constraints. Exceeding it is not a result we can report."""
@@ -85,6 +86,28 @@ def decode_orientation(orientation: torch.Tensor) -> torch.Tensor:
     return 0.5 * torch.atan2(orientation[:, 1:2], orientation[:, 0:1])
 
 
+def estimate_parameters(cfg: WafenConfig) -> int:
+    """Parameter count from the config alone, without building anything.
+
+    Convolution weights dominate -- batch-norm terms are a rounding error at these widths
+    -- so this is a slight under-estimate, which is why the exact count is still checked
+    after construction.
+    """
+    k = cfg.kernel_size ** 2
+    widths = [cfg.base_channels * 2 ** i for i in range(cfg.depth)]
+    total = 0
+    previous = cfg.in_channels
+    for width in widths:                       # encoder: two convolutions per level
+        total += k * previous * width + k * width * width
+        previous = width
+    for level in reversed(range(cfg.depth - 1)):   # decoder, with skip concatenation
+        fan_in = widths[level + 1] + widths[level]
+        total += k * fan_in * widths[level] + k * widths[level] * widths[level]
+    total += k * widths[0] * cfg.head_channels + k * cfg.head_channels ** 2
+    total += 6 * cfg.head_channels             # five heads, one of them two channels
+    return total
+
+
 def _block(in_channels: int, out_channels: int, kernel: int) -> nn.Sequential:
     padding = kernel // 2
     return nn.Sequential(
@@ -109,6 +132,18 @@ class Wafen(nn.Module):
 
         widths = [cfg.base_channels * 2 ** i for i in range(cfg.depth)]
 
+        # Check the budget *before* allocating. A wildly over-sized configuration would
+        # otherwise exhaust memory during construction and surface as an allocation
+        # failure rather than as the scope decision it actually is.
+        estimate = estimate_parameters(cfg)
+        if estimate > cfg.max_parameters:
+            raise ValueError(
+                f"configuration needs about {estimate:,} parameters, over the "
+                f"{cfg.max_parameters:,} budget. Edge deployability is a stated thesis "
+                f"goal, so this is out of scope rather than merely large -- reduce "
+                f"base_channels or depth."
+            )
+
         self.encoders = nn.ModuleList()
         previous = cfg.in_channels
         for width in widths:
@@ -132,11 +167,9 @@ class Wafen(nn.Module):
         self.confidence = nn.Conv2d(cfg.head_channels, 1, 1)
 
         total = self.parameter_count()
-        if total > cfg.max_parameters:
+        if total > cfg.max_parameters:  # exact count, in case the estimate was optimistic
             raise ValueError(
-                f"{total:,} parameters exceeds the {cfg.max_parameters:,} budget. "
-                f"Edge deployability is a stated thesis goal, so this configuration is "
-                f"out of scope rather than merely large -- reduce base_channels or depth."
+                f"{total:,} parameters exceeds the {cfg.max_parameters:,} budget."
             )
 
     def parameter_count(self) -> int:

@@ -179,10 +179,10 @@ def build_sample(
     a build killed mid-write would leave a truncated array that loads without error and
     silently corrupts training.
     """
-    import torch
-    import pyfing as pf
-
     from fpe.data.convert import load_greyscale
+    from fpe.models.pyfing_runtime import load_pyfing, pyfing_cpu
+
+    pf = load_pyfing()
 
     path = supervision_path(sample, out_root)
     if path.is_file() and not overwrite:
@@ -190,7 +190,7 @@ def build_sample(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     image = load_greyscale(sample.image)
-    with torch.no_grad():
+    with pyfing_cpu():
         mask = pf.fingerprint_segmentation(image, dpi=dpi, method="SUFS")
         orientation = pf.orientation_field_estimation(image, mask, dpi=dpi, method="SNFOE")
         period = pf.frequency_estimation(image, orientation, mask, dpi=dpi, method="SNFFE")
