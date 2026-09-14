@@ -141,7 +141,10 @@ class WafenLoss(nn.Module):
             "confidence": masked_l1(output.confidence, targets["evidence"], mask),
             "orientation": orientation_loss(output.orientation, targets["orientation"],
                                             mask),
-            "period": masked_l1(output.period, targets["period"], mask),
+            # Period is scored only where the teacher produced a plausible estimate;
+            # see PERIOD_RANGE in fpe.data.dataset.
+            "period": masked_l1(output.period, targets["period"],
+                                mask * targets.get("period_valid", mask)),
             "segmentation": segmentation_loss(output.segmentation, mask),
         }
         total = sum(getattr(self.weights, name) * value for name, value in parts.items())

@@ -82,6 +82,15 @@ class WearConfig:
     """Correlation length across the ridge."""
     n_orientation_bins: int = 8
     """Oriented filter bank size for anisotropic break generation."""
+    fragment_noise_scale: float = 0.4
+    """Resolution at which the oriented break field is generated, then upsampled.
+
+    The field is smooth random noise that gets thresholded, so generating it at reduced
+    scale preserves its correlation structure in image units while cutting the cost
+    quadratically in both image area and kernel size. At full resolution this was 96 ms of
+    a 163 ms call -- a 91x91 kernel applied once per orientation -- which starved the GPU
+    during training. Set to 1.0 to disable.
+    """
 
     # -- pressure-dependent partial contact ---------------------------------------------
     enable_contact: bool = True
@@ -166,11 +175,22 @@ def _oriented_noise(
     filter the same noise at N orientations and select per pixel -- is equivalent at this
     resolution and costs a handful of convolutions.
     """
-    h, w = orientation.shape
+    full_h, full_w = orientation.shape
+    scale = float(np.clip(cfg.fragment_noise_scale, 0.05, 1.0))
+    h = max(16, int(round(full_h * scale)))
+    w = max(16, int(round(full_w * scale)))
+    effective = (h / full_h + w / full_w) / 2
+
+    small_orientation = (orientation if (h, w) == (full_h, full_w)
+                         else cv2.resize(orientation, (w, h),
+                                         interpolation=cv2.INTER_NEAREST))
     noise = rng.standard_normal((h, w)).astype(np.float32)
 
     n_bins = max(2, cfg.n_orientation_bins)
-    ksize = _odd(int(6 * cfg.fragment_length_px))
+    # Correlation lengths are in image pixels, so they scale with the working resolution.
+    length = max(1.0, cfg.fragment_length_px * effective)
+    width = max(0.6, cfg.fragment_width_px * effective)
+    ksize = _odd(int(6 * length))
     half = ksize // 2
     yy, xx = np.mgrid[-half:half + 1, -half:half + 1].astype(np.float32)
 
@@ -181,16 +201,17 @@ def _oriented_noise(
         along = xx * np.cos(theta) + yy * np.sin(theta)
         across = -xx * np.sin(theta) + yy * np.cos(theta)
         kernel = np.exp(
-            -0.5 * ((along / cfg.fragment_length_px) ** 2
-                    + (across / cfg.fragment_width_px) ** 2)
+            -0.5 * ((along / length) ** 2 + (across / width) ** 2)
         ).astype(np.float32)
         kernel /= kernel.sum()
         responses[i] = cv2.filter2D(noise, -1, kernel, borderType=cv2.BORDER_REFLECT)
 
     index = np.clip(
-        np.round(orientation / np.pi * n_bins).astype(np.int32), 0, n_bins - 1
+        np.round(small_orientation / np.pi * n_bins).astype(np.int32), 0, n_bins - 1
     )
     field = np.take_along_axis(responses, index[None], axis=0)[0]
+    if (h, w) != (full_h, full_w):
+        field = cv2.resize(field, (full_w, full_h), interpolation=cv2.INTER_LINEAR)
     spread = field.std()
     return (field / spread).astype(np.float32) if spread > 1e-8 else field
 
@@ -219,6 +240,7 @@ class WearDegradation:
         seed: int,
         severity: float = 0.5,
         mask: np.ndarray | None = None,
+        orientation: np.ndarray | None = None,
     ) -> WearResult:
         """Degrade one greyscale image.
 
@@ -232,6 +254,11 @@ class WearDegradation:
         paper. Outside the mask the image is returned untouched and evidence stays 1.0,
         meaning "nothing was there to lose"; consumers should still restrict the
         confidence loss to the foreground.
+
+        `orientation` supplies a ridge orientation field if one is already known, which
+        skips the internal structure-tensor estimate. Training callers have the teacher's
+        field cached, so passing it is both faster and better grounded than re-deriving a
+        rough one from the image.
         """
         if not 0.0 <= severity <= 1.0:
             raise ValueError(f"severity must be in [0, 1], got {severity}")
@@ -259,7 +286,14 @@ class WearDegradation:
 
         # Sample every random quantity *before* severity is applied, so that raising
         # severity for a fixed seed can only ever add damage.
-        orientation = _ridge_orientation(img, cfg.ridge_period_px)
+        if orientation is None:
+            orientation = _ridge_orientation(img, cfg.ridge_period_px)
+        elif orientation.shape != img.shape:
+            raise ValueError(
+                f"orientation shape {orientation.shape} does not match image {img.shape}"
+            )
+        else:
+            orientation = np.mod(np.asarray(orientation, np.float32), np.pi)
         wear_field = _smooth_field(rng, (h, w), cfg.attenuation_scale_px)
         break_field = _oriented_noise(rng, orientation, cfg) if cfg.enable_fragmentation \
             else np.zeros((h, w), np.float32)

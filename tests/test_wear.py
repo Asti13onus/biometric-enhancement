@@ -238,3 +238,24 @@ def test_no_mask_matches_an_all_ones_mask(synthetic_print):
                     mask=np.ones(synthetic_print.shape, np.uint8))
     np.testing.assert_allclose(without.image, with_full.image, atol=1e-6)
     np.testing.assert_allclose(without.evidence, with_full.evidence, atol=1e-6)
+
+
+def test_supplied_orientation_is_used_instead_of_estimating(synthetic_print):
+    """Callers with a better orientation field should be able to supply it."""
+    from fpe.degradation.wear import _ridge_orientation
+
+    wdm = WearDegradation()
+    estimated = wdm(synthetic_print, seed=4, severity=0.6)
+    own = _ridge_orientation(synthetic_print.astype(np.float32) / 255.0, 9.0)
+    supplied = wdm(synthetic_print, seed=4, severity=0.6, orientation=own)
+    np.testing.assert_allclose(estimated.evidence, supplied.evidence, atol=1e-5)
+
+    rotated = wdm(synthetic_print, seed=4, severity=0.6,
+                  orientation=np.full_like(own, np.pi / 2))
+    assert not np.allclose(rotated.evidence, supplied.evidence)
+
+
+def test_supplied_orientation_shape_is_validated(synthetic_print):
+    with pytest.raises(ValueError, match="orientation shape"):
+        WearDegradation()(synthetic_print, seed=0, severity=0.5,
+                          orientation=np.zeros((5, 5), np.float32))
