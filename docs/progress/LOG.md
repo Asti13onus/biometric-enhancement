@@ -6,6 +6,54 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-09-26 — Session 10: first trained model, first real-data result (negative)
+
+**Training — three causes stood between us and a single completed epoch**
+- **fp16 is broken on this GPU.** Under autocast a `Conv2d` with inputs near 5 returns NaN
+  on the GTX 1650; fp32 on the same batch is exact. Every loss, train and val, was NaN —
+  one NaN forward also poisons BatchNorm running stats. The canary never caught it
+  because it runs in fp32. AMP is now opt-in; a non-finite loss stops the run at batch 1.
+  The card has no tensor cores, so fp32 costs almost nothing.
+- **DataLoader workers exhaust the pagefile.** Each Windows worker re-imports torch and
+  its CUDA DLLs (~5.7 GB commit per torch process); two hit WinError 1455 and the main
+  process hung for good on the dead worker. Workers now default to 0.
+- **The machine itself.** A leaked, elevated `explorer.exe` held 13.5 GB of commit (0.03 GB
+  free system-wide) — the cause of the recurring "bun crashed" / terminal / IDE failures.
+  After it was ended, RAM (8 GB, one stick) became the limit: the run crawled at 2% GPU
+  while VS Code, Dropbox and Edge held ~5 GB; closing them took epochs 8 → 3.5 min.
+  **16 GB of RAM would remove most of this project's friction.**
+- `scripts/train_simple.bat`: one process, short epochs, atomic checkpoints, auto-resume
+  and retry. Must be started from its own window — started from inside the IDE, it
+  died with the IDE.
+
+**Run:** 10 × 400 steps, batch 4 × accumulate 4, fp32, 51 min. Best val ridge **0.260**
+(epoch 7, from 0.446), plateaued over the last three epochs. Orientation, segmentation and
+confidence all learned; **the period head barely did** (6.2 px MAE on ~8–10 px periods).
+
+**First real-data result — FVC2004 B, all four DBs, coverage 1.0**
+
+  | method | EER [95% CI] | NFIQ 2 | minutiae/img | CPU ms |
+  |---|---|---|---|---|
+  | none | 0.0991 [0.088, 0.112] | 46.0 | 62.1 | — |
+  | GBFEN | 0.0955 [0.084, 0.110] | 57.5 | 69.9 | 1054 |
+  | SNFEN | 0.0895 [0.077, 0.101] | 59.2 | 66.1 | 1061 |
+  | **WAFEN** | **0.1353 [0.124, 0.149]** | 57.3 | **92.8** | **576** |
+
+- **Worse than no enhancement, intervals disjoint.** NFIQ 2 rises as much as SNFEN's while
+  minutiae per image rise 50%: the network writes convincing ridges where evidence is
+  gone, which looks better to a quality metric and matches worse. This is exactly the
+  "invention becomes a minutia" failure the thesis argues about — and it is a
+  synthetic-only model scored without its abstention mechanism.
+- CPU inference 576 ms/image at 480×640 — just over budget; SNFEN's chain is 1,061.
+
+**Next**
+- U9 abstention sweep: the same checkpoint with confidence gating at several thresholds.
+  If precision is the problem, EER should fall as coverage drops. Cheap — no retraining.
+- Check where the extra minutiae fall (low-confidence regions or not) before tuning.
+- Only then consider a longer run or a higher period weight.
+
+---
+
 ## 2026-09-15 — Session 9: Phase B complete, GPU unblocked, canary passes
 
 **Where the plan stands**
