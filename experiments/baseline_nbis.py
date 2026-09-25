@@ -10,6 +10,7 @@ Thin entrypoint by convention -- the logic lives in `src/fpe/eval/baseline.py`.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 
@@ -34,10 +35,12 @@ def main() -> int:
     ap.add_argument("--bootstrap", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument(
-        "--method", default="none", choices=["none", "SNFEN", "GBFEN"],
-        help="'none' is the no-enhancement control; the others are pyfing's "
-             "released implementations of the 2026 state of the art",
+        "--method", default="none", choices=["none", "SNFEN", "GBFEN", "WAFEN"],
+        help="'none' is the no-enhancement control; SNFEN/GBFEN are pyfing's "
+             "released implementations of the 2026 state of the art; WAFEN is ours",
     )
+    ap.add_argument("--checkpoint", default=str(ROOT / "data" / "work" / "wafen" / "best.pt"),
+                    help="WAFEN weights (only used with --method WAFEN)")
     ap.add_argument("--notes", default=None)
     ap.add_argument("--dry-run", action="store_true", help="do not write to the registry")
     args = ap.parse_args()
@@ -54,7 +57,14 @@ def main() -> int:
     print(f"baseline: {label}  method={args.method}")
 
     enhancer = None
-    if args.method != "none":
+    if args.method == "WAFEN":
+        import torch
+
+        from fpe.models.wafen_enhancer import WafenEnhancer
+
+        torch.set_num_threads(4)  # CPU timing, comparable with pyfing's; PROJECT_RULES.md cap
+        enhancer = WafenEnhancer(args.checkpoint, cache_dir=work_dir)
+    elif args.method != "none":
         from fpe.models.pyfing_baseline import PyfingEnhancer
 
         enhancer = PyfingEnhancer(args.method, cache_dir=work_dir)
@@ -102,6 +112,10 @@ def main() -> int:
             "impostor_mode": args.impostor,
             "bootstrap": args.bootstrap,
             "seed": args.seed,
+            **({"checkpoint": str(Path(args.checkpoint).relative_to(ROOT)),
+                "checkpoint_sha256": hashlib.sha256(
+                    Path(args.checkpoint).read_bytes()).hexdigest()}
+               if args.method == "WAFEN" else {}),
         },
         manifest_path=manifest,
         notes=args.notes,
