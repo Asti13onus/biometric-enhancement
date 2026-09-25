@@ -17,6 +17,9 @@ import argparse
 import sys
 from pathlib import Path
 
+import cv2
+import torch
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -43,10 +46,20 @@ def main() -> int:
     ap.add_argument("--accumulate", type=int, default=2)
     ap.add_argument("--learning-rate", type=float, default=3e-4)
     ap.add_argument("--patch", type=int, default=256)
-    ap.add_argument("--workers", type=int, default=2,
-                    help="keep low; 7.8 GB of RAM binds before cores do")
+    ap.add_argument("--workers", type=int, default=0,
+                    help="0 = load in the main process. Each Windows worker re-imports "
+                         "torch and its CUDA DLLs; two of them exhausted the pagefile "
+                         "(WinError 1455) and hung the run")
+    ap.add_argument("--amp", action="store_true",
+                    help="fp16 mixed precision. Off by default: on the GTX 1650 a Conv2d "
+                         "with inputs near 5 returns NaN under autocast (fp32 is exact), "
+                         "and the card has no tensor cores, so fp16 buys little")
+    ap.add_argument("--threads", type=int, default=4,
+                    help="CPU threads for torch and OpenCV; PROJECT_RULES.md caps this at 4")
     ap.add_argument("--max-steps-per-epoch", type=int, default=None)
     ap.add_argument("--limit-train", type=int, default=None)
+    ap.add_argument("--limit-val", type=int, default=None,
+                    help="evenly spaced validation subset, to keep per-epoch eval short")
     ap.add_argument("--device", default=None)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--canary", action="store_true", help="run the canary and exit")
@@ -69,6 +82,11 @@ def main() -> int:
         return 1
     if args.limit_train:
         by_split["train"] = by_split["train"][:args.limit_train]
+    if args.limit_val:
+        val = by_split["val"]
+        by_split["val"] = val[::max(1, len(val) // args.limit_val)][:args.limit_val]
+    torch.set_num_threads(args.threads)
+    cv2.setNumThreads(args.threads)
 
     augment = AugmentConfig(patch=args.patch)
     datasets = {
@@ -101,8 +119,16 @@ def main() -> int:
     config = TrainConfig(
         epochs=args.epochs, batch_size=args.batch_size, accumulate=args.accumulate,
         learning_rate=args.learning_rate, num_workers=args.workers, seed=args.seed,
+        amp=args.amp,
         max_steps_per_epoch=args.max_steps_per_epoch, device=args.device,
     )
+    checkpoint = args.out_dir / "checkpoint.pt"
+    if not args.no_resume and checkpoint.is_file():
+        done = torch.load(checkpoint, map_location="cpu", weights_only=False)["epoch"]
+        if done >= config.epochs - 1:
+            # Re-running a finished run must not append a second registry row for it.
+            print(f"already trained {done + 1}/{config.epochs} epochs -> {args.out_dir}")
+            return 0
     print(f"\ntraining {config.epochs} epochs, effective batch "
           f"{config.batch_size * config.accumulate}\n")
     model, history = train(

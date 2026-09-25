@@ -189,3 +189,57 @@ def test_training_step_stays_within_the_gpu_budget(dataset):
     total.backward()
     peak = torch.cuda.max_memory_allocated() / 1e9
     assert peak < 4.0, f"peak {peak:.2f} GB exceeds the 4 GB budget"
+
+
+# -- VRAM preflight ----------------------------------------------------------------
+
+def test_require_vram_is_a_noop_on_cpu():
+    from fpe.train import require_vram
+    require_vram(torch.device("cpu"), needed_gb=999.0, what="anything")
+
+
+def test_require_vram_refuses_when_the_gpu_is_too_full():
+    """Failing here costs nothing; failing mid-epoch wastes the epoch."""
+    from fpe.train import require_vram
+
+    if not torch.cuda.is_available():
+        pytest.skip("no CUDA device")
+    with pytest.raises(torch.OutOfMemoryError, match="VRAM is free"):
+        require_vram(torch.device("cuda"), needed_gb=1e6, what="an absurd job")
+
+
+def test_free_vram_is_none_on_cpu():
+    from fpe.train import free_vram_gb
+    assert free_vram_gb(torch.device("cpu")) is None
+
+
+def test_canary_batch_size_bounds_its_memory(dataset):
+    """The canary must not use a larger batch than the training it sanity-checks.
+
+    Loading all samples at once made the preflight check heavier than the real job, so it
+    could fail on a configuration that would have trained fine -- the worst possible
+    failure mode for a preflight test.
+    """
+    from unittest.mock import patch as mock_patch
+
+    seen: list[int] = []
+    real_stack = torch.stack
+
+    def recording_stack(tensors, *args, **kwargs):
+        if tensors and isinstance(tensors[0], torch.Tensor) and tensors[0].dim() == 3:
+            seen.append(len(tensors))
+        return real_stack(tensors, *args, **kwargs)
+
+    with mock_patch("fpe.train.torch.stack", recording_stack):
+        overfit_check(dataset, samples=9, steps=1, device="cpu", model_config=TINY,
+                      batch_size=3)
+    assert seen and max(seen) <= 3, f"canary built a batch of {max(seen)} images"
+
+
+def test_canary_still_converges_when_chunked(dataset):
+    """Chunking changes the memory profile, not the check itself."""
+    before = overfit_check(dataset, samples=8, steps=1, device="cpu",
+                           model_config=TINY, batch_size=4)
+    after = overfit_check(dataset, samples=8, steps=120, device="cpu",
+                          model_config=TINY, batch_size=4)
+    assert after < before

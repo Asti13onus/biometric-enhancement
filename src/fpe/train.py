@@ -35,7 +35,8 @@ from torch.utils.data import DataLoader
 from fpe.models.losses import LossWeights, WafenLoss
 from fpe.models.wafen import Wafen, WafenConfig
 
-__all__ = ["TrainConfig", "train", "overfit_check", "evaluate"]
+__all__ = ["TrainConfig", "train", "overfit_check", "evaluate",
+           "free_vram_gb", "require_vram"]
 
 
 @dataclass
@@ -84,6 +85,14 @@ def _schedule(step: int, total: int, warmup: int) -> float:
     return 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
 
 
+def _save_atomic(obj, path: Path) -> None:
+    """Write, then rename. A crash mid-save must not destroy the checkpoint it replaces --
+    on this machine a crash is the case resume exists for, so it cannot corrupt resume."""
+    tmp = path.with_name(path.name + ".tmp")
+    torch.save(obj, tmp)
+    tmp.replace(path)
+
+
 def _to_device(batch, device):
     image, targets = batch
     return image.to(device), {k: v.to(device) for k, v in targets.items()}
@@ -106,32 +115,71 @@ def evaluate(model: Wafen, loader: DataLoader, criterion: WafenLoss,
     return {k: v / batches for k, v in totals.items()} if batches else {}
 
 
+def free_vram_gb(device: torch.device) -> float | None:
+    """Free VRAM in GB, or None on CPU."""
+    if device.type != "cuda":
+        return None
+    free, _ = torch.cuda.mem_get_info()
+    return free / 1e9
+
+
+def require_vram(device: torch.device, needed_gb: float, what: str) -> None:
+    """Fail before starting if the GPU cannot hold the job.
+
+    The 4 GB on this card is **shared with the Windows desktop**: browsers, the editor and
+    the compositor routinely hold 1.5-2 GB, so usable VRAM is whatever is left at the
+    moment a run starts, not the number on the box. Discovering that part-way through an
+    epoch wastes the epoch; discovering it here costs nothing.
+    """
+    free = free_vram_gb(device)
+    if free is not None and free < needed_gb:
+        raise torch.OutOfMemoryError(
+            f"{what} needs about {needed_gb:.1f} GB but only {free:.1f} GB of VRAM is "
+            f"free. This card shares its 4 GB with the desktop -- close browser windows "
+            f"and the editor, or reduce --batch-size / --patch."
+        )
+
+
 def overfit_check(
     dataset, *, samples: int = 10, steps: int = 150, device: str | None = None,
     model_config: WafenConfig | None = None, learning_rate: float = 1e-3,
+    batch_size: int = 4,
 ) -> float:
     """Train on a handful of items until the loss collapses; return the final ridge loss.
 
     The cheapest possible check that the wiring is right. A network that cannot memorise
     ten images has a bug, not a data problem, and this finds it in a minute.
+
+    The samples are processed in mini-batches with accumulated gradients rather than as one
+    large batch. Loading all of them at once made the canary's memory footprint *larger*
+    than the training run it exists to sanity-check, so it could OOM on a job that would
+    have trained perfectly well -- the check failing where the real work would have passed
+    is the worst possible failure for a preflight test.
     """
     torch.manual_seed(0)
     device = resolve_device(device)
+    require_vram(device, 1.5, "the over-fit canary")
     model = Wafen(model_config or WafenConfig()).to(device).train()
     criterion = WafenLoss()
     optimiser = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-    batch = [dataset[i] for i in range(min(samples, len(dataset)))]
-    images = torch.stack([b[0] for b in batch]).to(device)
-    targets = {k: torch.stack([b[1][k] for b in batch]).to(device) for k in batch[0][1]}
+    items = [dataset[i] for i in range(min(samples, len(dataset)))]
+    chunks = [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
+    batches = [(
+        torch.stack([b[0] for b in chunk]).to(device),
+        {k: torch.stack([b[1][k] for b in chunk]).to(device) for k in chunk[0][1]},
+    ) for chunk in chunks]
 
     ridge = math.inf
     for _ in range(steps):
         optimiser.zero_grad(set_to_none=True)
-        total, parts = criterion(model(images), targets)
-        total.backward()
+        total_ridge = 0.0
+        for images, targets in batches:
+            total, parts = criterion(model(images), targets)
+            (total / len(batches)).backward()
+            total_ridge += parts["ridge"] / len(batches)
         optimiser.step()
-        ridge = parts["ridge"]
+        ridge = total_ridge
     return ridge
 
 
@@ -150,6 +198,9 @@ def train(
 
     torch.manual_seed(config.seed)
     device = resolve_device(config.device)
+    # Fail now rather than part-way through an epoch. Measured: batch 8 at 256px peaks at
+    # 2.56 GB, batch 4 at 1.97 GB, batch 8 at 192px at 1.04 GB.
+    require_vram(device, 0.35 * config.batch_size, "training")
     model = Wafen(model_config or WafenConfig()).to(device)
     criterion = WafenLoss(weights)
     optimiser = torch.optim.AdamW(model.parameters(), lr=config.learning_rate,
@@ -197,6 +248,12 @@ def train(
             image, targets = _to_device(batch, device)
             with torch.autocast("cuda", enabled=use_amp):
                 total, parts = criterion(model(image), targets)
+            if not math.isfinite(sum(parts.values())):
+                # One NaN forward also poisons BatchNorm's running statistics, so every
+                # later epoch -- validation included -- is NaN too. Stop at the first one.
+                raise FloatingPointError(
+                    f"non-finite loss at epoch {epoch}, batch {index}: {parts}"
+                    + (" (mixed precision is on; try without it)" if use_amp else ""))
             scaler.scale(total / config.accumulate).backward()
 
             if (index + 1) % config.accumulate == 0:
@@ -231,10 +288,10 @@ def train(
         if val_ridge < history.best_val_ridge:
             history.best_val_ridge = val_ridge
             history.best_epoch = epoch
-            torch.save({"model": model.state_dict(),
-                        "config": (model_config or WafenConfig()).to_dict()}, best_path)
+            _save_atomic({"model": model.state_dict(),
+                          "config": (model_config or WafenConfig()).to_dict()}, best_path)
 
-        torch.save({
+        _save_atomic({
             "epoch": epoch, "model": model.state_dict(),
             "optimiser": optimiser.state_dict(), "scaler": scaler.state_dict(),
             "history": history.to_dict(),
