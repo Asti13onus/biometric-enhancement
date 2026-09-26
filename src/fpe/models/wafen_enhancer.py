@@ -32,7 +32,8 @@ class WafenEnhancer:
 
     def __init__(self, checkpoint: str | Path, *, cache_dir: str | Path,
                  device: str = "cpu", mask_threshold: float = 0.5,
-                 abstain_threshold: float | None = None, guard_px: int = 8) -> None:
+                 abstain_threshold: float | None = None, guard_px: int = 8,
+                 block: int = 0) -> None:
         import torch
 
         from fpe.models.wafen import Wafen, WafenConfig
@@ -45,6 +46,8 @@ class WafenEnhancer:
         self.mask_threshold = mask_threshold
         self.abstain_threshold = abstain_threshold
         self.guard_px = guard_px
+        self.block = block
+        """0 = per-pixel gating; >0 = gate on mean confidence per block of this size."""
         self.cache_dir = Path(cache_dir) / "enhanced_wafen"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._times: list[float] = []
@@ -96,8 +99,10 @@ class WafenEnhancer:
         if self.abstain_threshold is not None:
             import cv2
 
-            from fpe.eval.abstain import coverage_fraction
+            from fpe.eval.abstain import block_confidence, coverage_fraction
 
+            if self.block:
+                confidence = block_confidence(confidence, foreground, self.block)
             declined = foreground & (confidence < self.abstain_threshold)
             shown = foreground & ~declined
             self._coverage.append(coverage_fraction(~declined, foreground))

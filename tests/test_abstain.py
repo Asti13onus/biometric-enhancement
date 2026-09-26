@@ -165,3 +165,27 @@ def test_xyt_filter_reads_y_from_the_bottom_as_mindtct_writes_it(tmp_path):
                     tmp_path / "t.xyt")
     assert filter_xyt_file(xyt, keep) == 1
     assert [m.y for m in read_xyt(xyt)] == [5]
+
+
+def test_block_confidence_is_the_foreground_mean_of_each_block():
+    """Background must not dilute a block, and every pixel in a block gets one value."""
+    from fpe.eval.abstain import block_confidence
+
+    conf = np.zeros((32, 32), np.float32)
+    conf[:16, :16] = 0.8
+    conf[0, 0] = 0.0                              # one speck: must not decline the block
+    fg = np.ones((32, 32), bool)
+    fg[16:, 16:] = False                          # background block
+    out = block_confidence(conf, fg, 16)
+    assert out.shape == conf.shape
+    assert np.allclose(out[:16, :16], (0.8 * 255) / 256)
+    assert np.allclose(out[16:, 16:], 0.0)
+    assert len(np.unique(out[:16, :16])) == 1
+
+
+def test_block_confidence_handles_sides_not_divisible_by_the_block():
+    from fpe.eval.abstain import block_confidence
+
+    conf = np.full((20, 37), 0.5, np.float32)
+    out = block_confidence(conf, np.ones_like(conf, bool), 16)
+    assert out.shape == (20, 37) and np.allclose(out, 0.5)

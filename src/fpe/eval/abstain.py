@@ -32,7 +32,8 @@ from pathlib import Path
 import numpy as np
 
 __all__ = [
-    "AbstentionConfig", "apply_coverage", "coverage_fraction", "filter_minutiae",
+    "AbstentionConfig", "apply_coverage", "block_confidence", "coverage_fraction",
+    "filter_minutiae",
     "filter_xyt_file", "write_xyt",
 ]
 
@@ -71,6 +72,27 @@ def apply_coverage(
 
     image = np.where(coverage, np.asarray(ridge, dtype=np.float32), config.background)
     return image.astype(np.float32), coverage
+
+
+def block_confidence(confidence: np.ndarray, foreground: np.ndarray,
+                     size: int = 16) -> np.ndarray:
+    """Mean confidence over the foreground pixels of each `size` x `size` block.
+
+    Quality decisions are conventionally made per block, not per pixel. Per-pixel
+    gating on a noisy confidence map declines specks scattered across the whole finger,
+    and the guard band around each speck removes genuine minutiae with the invented ones.
+    Background pixels do not dilute a block's mean; a block with no foreground gets 0.
+    """
+    confidence = np.asarray(confidence, dtype=np.float32)
+    fg = np.asarray(foreground).astype(np.float32)
+    h, w = confidence.shape
+    ph, pw = -h % size, -w % size
+    c = np.pad(confidence * fg, ((0, ph), (0, pw)))
+    f = np.pad(fg, ((0, ph), (0, pw)))
+    shape = (c.shape[0] // size, size, c.shape[1] // size, size)
+    sums, counts = c.reshape(shape).sum((1, 3)), f.reshape(shape).sum((1, 3))
+    means = np.where(counts > 0, sums / np.maximum(counts, 1), 0.0)
+    return np.kron(means, np.ones((size, size), np.float32))[:h, :w]
 
 
 def coverage_fraction(

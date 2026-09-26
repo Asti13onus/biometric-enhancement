@@ -71,11 +71,29 @@ confidence all learned; **the period head barely did** (6.2 px MAE on ~8–10 px
   assumed top-origin. It was never used in a reported number; `filter_xyt_file` now
   flips it, with a test.
 
-**Next**
-- One pre-registered variant, no further tuning: block-level abstention (mean confidence
-  per 16×16 block), the standard granularity for quality decisions. If it still cannot
-  beat coverage 1.0, the negative result stands.
-- Check where the extra minutiae fall (low-confidence regions or not) before tuning.
+**Block-level abstention (16 px, t = 0.15 fixed in advance):** EER 0.1319 [0.118, 0.147],
+coverage 89.9%, 71.5 minutiae/img. It undoes the pixel-level damage but does not beat
+coverage 1.0 (0.1353) by more than noise. Abstention cannot rescue the ridge head. Closed.
+
+**Hybrid — WAFEN mask + orientation → SNFFE → SNFEN (replaces SUFS and SNFOE):**
+EER **0.3550** [0.339, 0.371], 103.5 minutiae/img, 902 ms/img. No convention bug: both
+networks emit angles in (−π/2, π/2], and the result does not change mod π. On real prints
+WAFEN's orientation is 11–15° (median) from SNFOE's and **fails near the core**, and its
+mask edge is ragged. Both generate minutiae exactly where identity is decided.
+
+**Where this leaves the model (honest):** no WAFEN variant beats *no enhancement* on real
+prints. 51 minutes of training on synthetic data alone gives estimates clearly worse
+than Cappelli's released networks. The fix is data, not post-processing: the model must see
+real prints.
+
+**Next — teacher distillation on real, non-test prints**
+- Label real prints from the *non-test* datasets (FVC2000/2002, Neurotechnology, MINEX,
+  L3-SF; FVC2004 stays held out) with the pyfing teachers (SUFS, SNFOE, SNFFE, and SNFEN
+  output as the ridge target) using the existing supervision pipeline. Fine-tune WAFEN on
+  those plus Anguli.
+- Target: match SNFEN's EER at one forward pass (~0.5 s against 1.06 s). That is the
+  thesis's four-networks-into-one claim, and it is testable.
+- Leakage check before running: no FVC2004 image or derivative in training.
   If precision is the problem, EER should fall as coverage drops. Cheap — no retraining.
 - Check where the extra minutiae fall (low-confidence regions or not) before tuning.
 - Only then consider a longer run or a higher period weight.

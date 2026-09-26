@@ -35,15 +35,19 @@ def main() -> int:
     ap.add_argument("--bootstrap", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument(
-        "--method", default="none", choices=["none", "SNFEN", "GBFEN", "WAFEN"],
+        "--method", default="none", choices=["none", "SNFEN", "GBFEN", "WAFEN", "WAFEN+SNFEN"],
         help="'none' is the no-enhancement control; SNFEN/GBFEN are pyfing's "
-             "released implementations of the 2026 state of the art; WAFEN is ours",
+             "released implementations of the 2026 state of the art; WAFEN is ours; "
+             "WAFEN+SNFEN feeds WAFEN's mask and orientation into SNFFE + SNFEN",
     )
     ap.add_argument("--checkpoint", default=str(ROOT / "data" / "work" / "wafen" / "best.pt"),
                     help="WAFEN weights (only used with --method WAFEN)")
     ap.add_argument("--abstain", type=float, default=None,
                     help="WAFEN confidence threshold: decline foreground below it and drop "
                          "minutiae near declined pixels (plan U9). Default: coverage 1.0")
+    ap.add_argument("--block", type=int, default=0,
+                    help="with --abstain: gate on mean confidence per block of this size "
+                         "(0 = per pixel)")
     ap.add_argument("--notes", default=None)
     ap.add_argument("--dry-run", action="store_true", help="do not write to the registry")
     args = ap.parse_args()
@@ -53,8 +57,9 @@ def main() -> int:
         ap.error(f"no manifest at {manifest.relative_to(ROOT)}")
     data_root = Path(args.data_root) if args.data_root else ROOT / "data" / "raw" / args.dataset
     work_dir = Path(args.work_dir) if args.work_dir else ROOT / "data" / "work" / (
-        f"{args.dataset}_{args.subset or 'all'}_{args.method}"
+        f"{args.dataset}_{args.subset or 'all'}_{args.method.replace('+', '_')}"
         + (f"_t{args.abstain:.2f}" if args.abstain is not None else "")
+        + (f"_b{args.block}" if args.abstain is not None and args.block else "")
     )
 
     label = f"{args.dataset}/{args.subset}" if args.subset else args.dataset
@@ -68,7 +73,12 @@ def main() -> int:
 
         torch.set_num_threads(4)  # CPU timing, comparable with pyfing's; PROJECT_RULES.md cap
         enhancer = WafenEnhancer(args.checkpoint, cache_dir=work_dir,
-                                 abstain_threshold=args.abstain)
+                                 abstain_threshold=args.abstain, block=args.block)
+    elif args.method == "WAFEN+SNFEN":
+        from fpe.models.pyfing_baseline import WafenPyfingEnhancer
+
+        enhancer = WafenPyfingEnhancer("SNFEN", checkpoint=args.checkpoint,
+                                       cache_dir=work_dir)
     elif args.method != "none":
         from fpe.models.pyfing_baseline import PyfingEnhancer
 
@@ -125,8 +135,8 @@ def main() -> int:
             **({"checkpoint": str(Path(args.checkpoint).relative_to(ROOT)),
                 "checkpoint_sha256": hashlib.sha256(
                     Path(args.checkpoint).read_bytes()).hexdigest()}
-               if args.method == "WAFEN" else {}),
-            **({"abstain_threshold": args.abstain, "guard_px": 8}
+               if args.method.startswith("WAFEN") else {}),
+            **({"abstain_threshold": args.abstain, "guard_px": 8, "block": args.block}
                if args.abstain is not None else {}),
         },
         manifest_path=manifest,
