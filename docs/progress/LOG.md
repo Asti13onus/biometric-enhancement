@@ -153,6 +153,29 @@ real prints.
   trail, not an excuse: it names the requirement for any future attempt (pair-consistent
   training) and closes the corrected-synthesis arm with a mechanism, not a shrug.
 
+**Pair-consistent training — the diagnosis's own experiment, and the arm's last word**
+- Each item became two independently-damaged, pixel-aligned views of one print, with a
+  masked L1 between the two reconstructions (weight 1.0, fixed in advance). Fine-tuned
+  8 × 400 from wafen_mn.
+- It worked as training: cross-view disagreement 0.1253 → 0.1068 (−15%), and the best
+  real-val ridge (0.2680) and minutiae-site error (0.2073) of any run — the consistency
+  term helped the supervised objectives rather than trading against them.
+- **FVC2004: EER 0.1359 [0.121, 0.149].** Statistically identical to 0.1347 / 0.1376 /
+  0.1310. Pre-committed criterion: the corrected-synthesis arm is closed.
+- **The complete negative result, now fully characterised.** Four distinct objectives were
+  each improved substantially — pixel overlap, NFIQ 2, minutiae-site error, and
+  cross-view consistency under our wear model — and the matcher moved for none of them.
+  The last one sharpens the diagnosis once more: consistency was trained over *our wear
+  model's* variation, and the EER says real cross-impression variation (pose, pressure,
+  skin state, sensor contact) is not spanned by it. The degradation model itself is the
+  ceiling — which is the thesis's central question answered, not dodged: corrected
+  synthesis fails on real prints *because the correction is itself synthetic*.
+- Future-work section, now with two named requirements instead of hand-waving:
+  (1) consistency across *real* impression pairs, which needs registration
+  (alignment) machinery we do not have; (2) degradation models validated against real
+  cross-impression variation, not only against single-image realism (U3 measured the
+  latter and the wear model won it — this result shows why that was not enough).
+
 **Next — teacher distillation on real, non-test prints**
 - Label real prints from the *non-test* datasets (FVC2000/2002, Neurotechnology, MINEX,
   L3-SF; FVC2004 stays held out) with the pyfing teachers (SUFS, SNFOE, SNFFE, and SNFEN
