@@ -42,9 +42,10 @@ from fpe.data.anguli import AnguliSample, supervision_path
 from fpe.data.convert import load_greyscale
 from fpe.degradation.wear import WearConfig, WearDegradation
 
-__all__ = ["AugmentConfig", "WafenDataset", "rotate_orientation"]
+__all__ = ["AugmentConfig", "WafenDataset", "minutia_weight_map", "rotate_orientation"]
 
-TARGET_KEYS = ("mask", "ridge", "orientation", "period", "period_valid", "evidence")
+TARGET_KEYS = ("mask", "ridge", "orientation", "period", "period_valid", "evidence",
+               "minutiae")
 
 PERIOD_RANGE = (3.0, 25.0)
 """Plausible ridge periods in pixels at 500 dpi.
@@ -69,6 +70,40 @@ class AugmentConfig:
     severity: tuple[float, float] = (0.0, 1.0)
     foreground_tries: int = 24
     """Attempts to land a patch on the finger before accepting whatever came up."""
+
+
+def minutia_weight_map(ridge: np.ndarray, mask: np.ndarray, *, radius: int = 7,
+                       border_px: int = 8) -> np.ndarray:
+    """Disks over the target's minutiae: skeleton endpoints and bifurcations.
+
+    Matching is decided by ridge endings and junctions, which occupy a tiny fraction of
+    pixels; a pixel-overlap loss barely weighs them, which is how a model can match the
+    teacher's map almost everywhere and still mint spurious minutiae (session 10). This
+    map lets the loss charge extra exactly there.
+
+    Crossing number on the skeleton: an endpoint has one skeleton neighbour, a
+    bifurcation three or more. Points within `border_px` of the patch edge or of the
+    mask's background are excluded -- an ending created by the crop or the segmentation
+    boundary is an artifact of the framing, not a feature of the finger.
+    """
+    from skimage.morphology import skeletonize
+
+    binary = np.asarray(ridge) > 0.5
+    if not binary.any():
+        return np.zeros_like(ridge, dtype=np.float32)
+    skeleton = skeletonize(binary)
+    neighbours = cv2.filter2D(skeleton.astype(np.uint8), -1, np.ones((3, 3), np.float32),
+                              borderType=cv2.BORDER_CONSTANT)
+    points = skeleton & ((neighbours == 2) | (neighbours >= 4))  # self + 1, or self + >=3
+
+    interior = cv2.erode((np.asarray(mask) > 0.5).astype(np.uint8),
+                         np.ones((2 * border_px + 1,) * 2, np.uint8)).astype(bool)
+    interior[:border_px] = interior[-border_px:] = False
+    interior[:, :border_px] = interior[:, -border_px:] = False
+    points &= interior
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * radius + 1,) * 2)
+    return cv2.dilate(points.astype(np.uint8), kernel).astype(np.float32)
 
 
 def rotate_orientation(angles: np.ndarray, radians: float) -> np.ndarray:
@@ -231,6 +266,7 @@ class WafenDataset(Dataset):
 
         degraded, targets, evidence = self._crop(degraded, targets, evidence, rng)
         targets["evidence"] = evidence
+        targets["minutiae"] = minutia_weight_map(targets["ridge"], targets["mask"])
 
         tensors = {k: torch.from_numpy(np.ascontiguousarray(v)).float().unsqueeze(0)
                    for k, v in targets.items()}

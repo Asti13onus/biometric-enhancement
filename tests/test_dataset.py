@@ -163,7 +163,7 @@ def test_item_shapes_and_dtypes(corpus):
     image, targets = WafenDataset(samples, supervision)[0]
     assert image.shape == (1, SIZE, SIZE) and image.dtype == torch.float32
     assert set(targets) == {"mask", "ridge", "orientation", "period", "period_valid",
-                            "evidence"}
+                            "evidence", "minutiae"}
     for name, tensor in targets.items():
         assert tensor.shape == (1, SIZE, SIZE), name
         assert tensor.dtype == torch.float32, name
@@ -332,3 +332,73 @@ def test_real_print_ridge_target_comes_from_the_cache(corpus):
                         image=samples[0].image, split="train")
     _, targets = WafenDataset([real], supervision)._load(real)
     assert np.array_equal(targets["ridge"], teacher / 255.0)
+
+
+# -- minutia weight map (the minutia-aware loss's input) -----------------------------
+
+def test_unbroken_stripes_carry_no_minutia_weight():
+    """Ridges running edge to edge end only at the border, which is excluded."""
+    from fpe.data.dataset import minutia_weight_map
+
+    ridge = np.zeros((96, 96), np.float32)
+    ridge[:, ::8] = 1.0
+    weights = minutia_weight_map(ridge, np.ones_like(ridge))
+    assert weights.sum() == 0.0
+
+
+def test_a_ridge_ending_gets_a_weight_disk_at_the_ending():
+    from fpe.data.dataset import minutia_weight_map
+
+    ridge = np.zeros((96, 96), np.float32)
+    ridge[:, ::8] = 1.0
+    ridge[40:, 48] = 0.0                      # one ridge stops at row 40
+    weights = minutia_weight_map(ridge, np.ones_like(ridge))
+    assert weights[40, 48] == 1.0
+    assert weights[40, 16] == 0.0             # unbroken neighbours stay unweighted
+    assert weights.mean() < 0.05              # the disk is local, not a blanket
+
+
+def test_a_bifurcation_gets_a_weight_disk():
+    from fpe.data.dataset import minutia_weight_map
+
+    ridge = np.zeros((96, 96), np.float32)
+    ridge[:, 48] = 1.0                        # vertical ridge
+    ridge[48, 48:] = 1.0                      # branch heading right: a junction at (48,48)
+    weights = minutia_weight_map(ridge, np.ones_like(ridge))
+    assert weights[48, 48] == 1.0
+
+
+def test_minutiae_near_the_mask_border_are_excluded():
+    """An ending created by the segmentation cut is framing, not a feature."""
+    from fpe.data.dataset import minutia_weight_map
+
+    ridge = np.zeros((96, 96), np.float32)
+    ridge[:, ::8] = 1.0
+    mask = np.ones_like(ridge)
+    mask[40:] = 0.0                           # the mask cuts every ridge at row 40
+    ridge[40:] = 0.0
+    weights = minutia_weight_map(ridge, mask)
+    assert weights.sum() == 0.0
+
+
+def test_loss_charges_extra_at_minutiae_and_only_when_the_map_is_present():
+    from fpe.models.losses import WafenLoss
+    from fpe.models.wafen import Wafen, WafenConfig
+
+    torch.manual_seed(0)
+    model = Wafen(WafenConfig(base_channels=4, depth=2, head_channels=4))
+    image = torch.rand(1, 1, 32, 32)
+    base = {k: torch.rand(1, 1, 32, 32) for k in ("mask", "ridge", "period",
+                                                  "period_valid", "evidence")}
+    base["mask"] = torch.ones(1, 1, 32, 32)
+    base["orientation"] = torch.zeros(1, 1, 32, 32)
+    out = model(image)
+
+    _, parts = WafenLoss()(out, base)
+    assert "minutiae" not in parts            # absent map, absent term
+
+    with_map = dict(base, minutiae=torch.ones(1, 1, 32, 32))
+    total_hi, parts_hi = WafenLoss()(out, with_map)
+    no_map_total, _ = WafenLoss()(out, base)
+    assert "minutiae" in parts_hi and parts_hi["minutiae"] > 0
+    assert float(total_hi) > float(no_map_total)

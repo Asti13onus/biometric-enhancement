@@ -118,6 +118,14 @@ class LossWeights:
     period: float = 0.1
     """Period is in pixels, roughly an order of magnitude larger than the other terms."""
     segmentation: float = 0.5
+    minutiae: float = 2.0
+    """Ridge error inside disks over the target's minutiae (endings and bifurcations).
+
+    Matching is decided by minutiae, which occupy a sliver of the pixels, so the overlap
+    losses barely weigh them: a model can score well and still break or join ridges in
+    exactly the places the matcher reads (measured: 56 vs SNFEN's 45 interior minutiae per
+    image on FVC2004, session 10). The heaviest weight in the objective, on purpose.
+    """
 
 
 class WafenLoss(nn.Module):
@@ -147,5 +155,10 @@ class WafenLoss(nn.Module):
                                 mask * targets.get("period_valid", mask)),
             "segmentation": segmentation_loss(output.segmentation, mask),
         }
+        if "minutiae" in targets:
+            # L1 on the ridge map restricted to the target's minutia disks -- see
+            # LossWeights.minutiae. Zero when a batch's patches carry no minutiae.
+            parts["minutiae"] = masked_l1(output.ridge, targets["ridge"],
+                                          mask * targets["minutiae"])
         total = sum(getattr(self.weights, name) * value for name, value in parts.items())
         return total, {name: float(value.detach()) for name, value in parts.items()}
