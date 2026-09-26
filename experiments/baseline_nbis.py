@@ -45,6 +45,9 @@ def main() -> int:
     ap.add_argument("--abstain", type=float, default=None,
                     help="WAFEN confidence threshold: decline foreground below it and drop "
                          "minutiae near declined pixels (plan U9). Default: coverage 1.0")
+    ap.add_argument("--blend", action="store_true",
+                    help="WAFEN: confidence-weighted blend of reconstruction and the "
+                         "original print (soft abstention; no threshold)")
     ap.add_argument("--block", type=int, default=0,
                     help="with --abstain: gate on mean confidence per block of this size "
                          "(0 = per pixel)")
@@ -60,6 +63,7 @@ def main() -> int:
         f"{args.dataset}_{args.subset or 'all'}_{args.method.replace('+', '_')}"
         + (f"_t{args.abstain:.2f}" if args.abstain is not None else "")
         + (f"_b{args.block}" if args.abstain is not None and args.block else "")
+        + ("_blend" if args.blend else "")
     )
 
     label = f"{args.dataset}/{args.subset}" if args.subset else args.dataset
@@ -73,7 +77,8 @@ def main() -> int:
 
         torch.set_num_threads(4)  # CPU timing, comparable with pyfing's; PROJECT_RULES.md cap
         enhancer = WafenEnhancer(args.checkpoint, cache_dir=work_dir,
-                                 abstain_threshold=args.abstain, block=args.block)
+                                 abstain_threshold=args.abstain, block=args.block,
+                                 blend=args.blend)
     elif args.method == "WAFEN+SNFEN":
         from fpe.models.pyfing_baseline import WafenPyfingEnhancer
 
@@ -136,6 +141,7 @@ def main() -> int:
                 "checkpoint_sha256": hashlib.sha256(
                     Path(args.checkpoint).read_bytes()).hexdigest()}
                if args.method.startswith("WAFEN") else {}),
+            **({"blend": True} if args.blend else {}),
             **({"abstain_threshold": args.abstain, "guard_px": 8, "block": args.block}
                if args.abstain is not None else {}),
         },

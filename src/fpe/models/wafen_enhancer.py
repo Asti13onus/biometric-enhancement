@@ -15,6 +15,13 @@ With `abstain_threshold` set (plan U9), foreground pixels whose confidence falls
 are declined: written as background, and -- through `filter_template` -- any minutia within
 `guard_px` of a declined pixel is dropped. The guard matters: blanking a region cuts every
 ridge crossing its edge, and each cut is a ridge ending mindtct will report as a minutia.
+
+With `blend=True`, the output is `confidence * reconstruction + (1 - confidence) *
+original` inside the mask -- the soft form of abstention. Hard abstention destroyed real
+evidence along every declined edge; blending repairs where the model is confident and
+*keeps the original evidence* where it is not, which is the design intent of the
+confidence head stated in plan U8. There is no threshold to tune: the confidence map
+itself is the weight.
 """
 
 from __future__ import annotations
@@ -33,7 +40,7 @@ class WafenEnhancer:
     def __init__(self, checkpoint: str | Path, *, cache_dir: str | Path,
                  device: str = "cpu", mask_threshold: float = 0.5,
                  abstain_threshold: float | None = None, guard_px: int = 8,
-                 block: int = 0) -> None:
+                 block: int = 0, blend: bool = False) -> None:
         import torch
 
         from fpe.models.wafen import Wafen, WafenConfig
@@ -48,6 +55,7 @@ class WafenEnhancer:
         self.guard_px = guard_px
         self.block = block
         """0 = per-pixel gating; >0 = gate on mean confidence per block of this size."""
+        self.blend = blend
         self.cache_dir = Path(cache_dir) / "enhanced_wafen"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._times: list[float] = []
@@ -112,6 +120,13 @@ class WafenEnhancer:
                 keep_path, "PNG")
 
         ink = np.where(shown, 1.0 - ridge, 1.0)
+        if self.blend:
+            # Stretch the original's contrast inside the finger so the two layers live on
+            # the same scale, then let confidence arbitrate pixel by pixel.
+            fg_values = img[foreground]
+            lo, hi = np.percentile(fg_values, [2, 98]) if fg_values.size else (0.0, 1.0)
+            original = np.clip((img - lo) / max(hi - lo, 1e-6), 0.0, 1.0)
+            ink = np.where(shown, confidence * ink + (1.0 - confidence) * original, 1.0)
         Image.fromarray(np.round(ink * 255).astype(np.uint8), mode="L").save(out, "PNG")
         return out
 

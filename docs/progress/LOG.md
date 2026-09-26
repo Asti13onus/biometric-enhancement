@@ -100,6 +100,42 @@ real prints.
   The loss rewards pixel overlap, and matching is decided by the ridge *endings* and
   *junctions* that pixel overlap barely weighs.
 
+**Per-database breakdown, hybrid re-run, confidence blend — the closing set**
+
+  | EER | none | SNFEN | WAFEN_ft |
+  |---|---|---|---|
+  | DB1 (optical) | 0.1142 | 0.1051 | 0.1509 |
+  | DB2 (optical) | 0.1444 | 0.1449 | 0.2225 |
+  | DB3 (thermal) | 0.0481 | **0.0278** | 0.0444 |
+  | DB4 (SFinGe) | **0.0607** | 0.0661 | 0.1053 |
+
+- **Even SNFEN beats "none" on only 2 of 4 databases** and loses on DB4. Enhancement's
+  benefit is sensor-dependent at the state of the art — a genuine finding of the harness,
+  and central to the "when does enhancement help?" story.
+- WAFEN_ft reaches parity with none on DB3 (CIs overlap); worse everywhere else.
+- Border-minutiae audit (finger-region distance, both polarities handled): WAFEN_ft and
+  SNFEN are equally contaminated at the mask border (24 vs 21 per image); the gap is
+  **interior** — ~56 vs ~45 interior minutiae/img, small ridge breaks/joins the loss
+  barely weighs.
+- Hybrid re-run with the fine-tuned checkpoint: 0.3550 → **0.2223**. Fine-tuning did fix
+  the orientation (as diagnosed), but the line stays closed.
+- **Confidence blend** (soft abstention, pre-committed, no threshold:
+  conf·reconstruction + (1−conf)·original inside the mask): **0.1310** [0.118, 0.144]
+  vs 0.1347 plain. Direction right, magnitude noise-level. 416 ms/img.
+
+**Assessment after 13 FVC2004 evaluations, all in the registry**
+- No WAFEN variant beats the unenhanced control on aggregate. The search stops here —
+  further variants would be test-set fishing, and every run is already logged.
+- What stands: (1) SOTA reproduced under one harness, per-sensor; (2) enhancement gains
+  are sensor-dependent even for SNFEN; (3) NFIQ 2 improves while EER worsens — three
+  separate demonstrations that quality metrics do not predict matcher accuracy;
+  (4) WAFEN matches SNFEN's NFIQ 2 (59.5 vs 59.2) at 2.4× lower CPU cost in one pass;
+  (5) the synthetic→real gap measured end to end — the thesis's comparison framing
+  (STRATEGY.md §1) was chosen to be robust to exactly this outcome.
+- The one remaining *research* lever, not tried: a minutia-aware loss (weight ridge
+  endings/bifurcations of the teacher's map heavily). Diagnosed cause fits; cost ~2 h;
+  outcome uncertain. Decision deferred to the supervisor conversation.
+
 **Next — teacher distillation on real, non-test prints**
 - Label real prints from the *non-test* datasets (FVC2000/2002, Neurotechnology, MINEX,
   L3-SF; FVC2004 stays held out) with the pyfing teachers (SUFS, SNFOE, SNFFE, and SNFEN
