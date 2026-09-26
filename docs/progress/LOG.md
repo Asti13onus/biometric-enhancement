@@ -6,6 +6,34 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-09-27 — Session 11: arm two moves the matcher — the comparison has its finding
+
+**Arm two — unsupervised domain alignment (Joshi line), on the same harness**
+- Pseudo-annotation: the *synthetic-only* checkpoint labels the 1,160 real non-test
+  prints with its own five outputs (`scripts/build_pseudo_annotations.py`); its
+  confidence becomes the evidence target. No pyfing, no ground truth.
+- Photometric mode: real prints enter undamaged; paired views differ by contrast/gamma/
+  blur/noise jitter (CDC-GAN's recipe), never by our wear model. Consistency in both
+  domains (Anguli wear-pairs + real photometric-pairs). 8 × 400 from `wafen/best.pt`.
+- Training: cross-view consistency 0.0458 → 0.0372; ridge flat; orientation on jittered
+  real prints stayed fragile (~0.3–0.4) — self-labels add stability, not information.
+- **FVC2004: EER 0.1105 [0.0985, 0.1232]** — vs arm one's 0.1353 [0.1238, 0.1489]:
+  **disjoint CIs, an 18% relative improvement**, after sixteen statistically flat
+  evaluations of arm-one variants. Still short of the unenhanced 0.0991, but the CI now
+  touches it. 88.1 minutiae/img, NFIQ 2 59.1, **336 ms/img** (fastest yet).
+- **The comparison finding the thesis was built for:** same network, benchmark and
+  budget — post-hoc domain alignment substantially outperforms corrected synthesis, and
+  neither yet beats the unenhanced control on worn-print data outside the alignment
+  literature's home benchmark. Also note the arms compose: the alignment started from
+  the corrected-synthesis checkpoint.
+- Pre-committed follow-up (allowed by yesterday's criterion "0.0991–0.1310 → one longer
+  run is justified"): a single 20-epoch alignment run, same recipe, no other changes.
+
+**Machine note:** the leaked-`explorer.exe` commit exhaustion recurred twice (~1.4 GB/h);
+killing it restores ~13 GB. Root-cause with ShellExView after the thesis runs.
+
+---
+
 ## 2026-09-26 — Session 10: first trained model, first real-data result (negative)
 
 **Training — three causes stood between us and a single completed epoch**
