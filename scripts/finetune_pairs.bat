@@ -13,7 +13,7 @@ set LOG=data\work\finetune_pc.log
 
 for /l %%i in (1,1,10) do (
   echo === attempt %%i >> %LOG%
-  .venv\Scripts\python.exe -u experiments\train_wafen.py --pairs --real-supervision data\processed\supervision_real --real-repeat 4 --init-from data\work\wafen_mn\best.pt --out-dir data\work\wafen_pc --epochs 8 --max-steps-per-epoch 400 --learning-rate 1e-4 --batch-size 2 --accumulate 8 --workers 0 --threads 4 --skip-canary >> %LOG% 2>&1
+  .venv\Scripts\python.exe -u experiments\train_wafen.py --pairs --real-supervision data\processed\supervision_real --real-repeat 4 --init-from data\work\wafen_mn\best.pt --out-dir data\work\wafen_pc --epochs 8 --max-steps-per-epoch 400 --learning-rate 1e-4 --batch-size 2 --accumulate 4 --workers 0 --threads 4 --skip-canary >> %LOG% 2>&1
   if not errorlevel 1 goto done
   echo attempt %%i failed; resuming in 60 s >> %LOG%
   ping -n 61 127.0.0.1 > nul
