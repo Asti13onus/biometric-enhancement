@@ -43,6 +43,7 @@ def _template_for(
     cache_dir: Path,
     work_dir: Path,
     preprocess: Callable[[Path], Path] | None,
+    postprocess: Callable[[Path, Path], Path] | None = None,
 ) -> tuple[Path | None, int, Path | None]:
     """Return (xyt path, minutia count, prepared image).
 
@@ -58,6 +59,8 @@ def _template_for(
         # mindtct cannot read PNG; lossless JPEG is byte-identical to it.
         jpl = to_nbis_input(png, cache_dir)
         xyt = run_mindtct(jpl, work_dir / jpl.stem)
+        if postprocess is not None:
+            xyt = postprocess(xyt, png)
     except (OSError, RuntimeError, ValueError):
         return None, 0, png
     count = len(read_xyt(xyt))
@@ -73,6 +76,7 @@ def run_baseline(
     work_dir: str | Path,
     subset: str | None = None,
     preprocess: Callable[[Path], Path] | None = None,
+    postprocess: Callable[[Path, Path], Path] | None = None,
     impostor: ImpostorMode = "all",
     n_resamples: int = 1000,
     seed: int = 0,
@@ -82,7 +86,9 @@ def run_baseline(
 
     `preprocess` is where an enhancement method plugs in: it receives a
     prepared greyscale PNG and returns the path to an enhanced one. `None` is
-    the no-enhancement control.
+    the no-enhancement control. `postprocess` receives (xyt, enhanced image) after
+    extraction and returns the template to match -- where abstention drops minutiae
+    that fall in regions the method declined to reconstruct.
     """
     data_root = Path(data_root)
     work_dir = Path(work_dir)
@@ -105,6 +111,7 @@ def run_baseline(
             cache_dir=cache_dir,
             work_dir=tmpl_dir,
             preprocess=preprocess,
+            postprocess=postprocess,
         )
         if prepared is not None:
             prepared_images.append(prepared)

@@ -46,8 +46,36 @@ confidence all learned; **the period head barely did** (6.2 px MAE on ~8–10 px
   synthetic-only model scored without its abstention mechanism.
 - CPU inference 576 ms/image at 480×640 — just over budget; SNFEN's chain is 1,061.
 
+**U9 abstention sweep — same checkpoint, confidence-gated, 8 px guard around declined pixels**
+
+  | coverage | threshold | EER [95% CI] | minutiae/img | dropped/img | FTA |
+  |---|---|---|---|---|---|
+  | 100% | — | 0.1353 [0.124, 0.149] | 92.8 | — | 0% |
+  | 85.2% | 0.15 | 0.1983 [0.183, 0.218] | 49.8 | 37.8 | 0% |
+  | 68.4% | 0.20 | 0.4138 [0.393, 0.435] | 30.6 | 46.7 | 1.3% |
+  | 47.8% | 0.30 | 0.3405 [0.307, 0.374] | 26.2 | 56.5 | **39%** |
+
+- **Abstention makes it worse, monotonically.** The 0.30 row looks better than 0.20 only
+  because 125 of 320 images failed to enrol, so its EER is on a survivor subset. It is
+  not comparable with the others.
+- **On real prints the confidence head is uncalibrated.** Median foreground confidence is
+  0.29 (p10 0.14, p90 0.75). Declining 15% of the finger drops 41% of minutiae, so the
+  declined pixels are speckled across the finger and the guard dilation removes real
+  minutiae with the invented ones. If confidence marked the invented ridges, EER would
+  fall as coverage falls. It rises.
+- Reading: a confidence head supervised only by the *synthetic* wear model's evidence map
+  does not transfer to real damage. That is the synthetic→real gap this thesis measures.
+  It is a negative result for corrected synthesis *alone*, not a harness bug.
+- Found and fixed a latent bug on the way: mindtct's default `.xyt` is **bottom-origin**
+  (100% of minutiae on the finger read that way, 90.6% top-origin). `filter_minutiae`
+  assumed top-origin. It was never used in a reported number; `filter_xyt_file` now
+  flips it, with a test.
+
 **Next**
-- U9 abstention sweep: the same checkpoint with confidence gating at several thresholds.
+- One pre-registered variant, no further tuning: block-level abstention (mean confidence
+  per 16×16 block), the standard granularity for quality decisions. If it still cannot
+  beat coverage 1.0, the negative result stands.
+- Check where the extra minutiae fall (low-confidence regions or not) before tuning.
   If precision is the problem, EER should fall as coverage drops. Cheap — no retraining.
 - Check where the extra minutiae fall (low-confidence regions or not) before tuning.
 - Only then consider a longer run or a higher period weight.

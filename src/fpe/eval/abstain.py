@@ -33,7 +33,7 @@ import numpy as np
 
 __all__ = [
     "AbstentionConfig", "apply_coverage", "coverage_fraction", "filter_minutiae",
-    "write_xyt",
+    "filter_xyt_file", "write_xyt",
 ]
 
 BACKGROUND = 1.0
@@ -101,6 +101,24 @@ def filter_minutiae(minutiae, coverage: np.ndarray) -> tuple[list, int]:
         if 0 <= m.y < height and 0 <= m.x < width and coverage[m.y, m.x]:
             kept.append(m)
     return kept, len(minutiae) - len(kept)
+
+
+def filter_xyt_file(xyt: str | Path, keep: np.ndarray) -> int:
+    """Filter a mindtct `.xyt` template in place against a top-origin `keep` mask.
+
+    Returns the number of minutiae dropped. **mindtct's default `.xyt` measures y from
+    the bottom of the image** (NIST internal representation; `-m1` would switch to ANSI
+    top-origin, and we do not pass it). Measured on FVC2004: read bottom-origin, 100% of
+    minutiae land on the finger; read top-origin, 90.6%. The mask is therefore flipped
+    here rather than trusting every caller to remember.
+    """
+    from fpe.metrics.nbis import read_xyt
+
+    minutiae = read_xyt(xyt)
+    kept, dropped = filter_minutiae(minutiae, np.asarray(keep)[::-1])
+    if dropped:
+        write_xyt(kept, xyt)
+    return dropped
 
 
 def write_xyt(minutiae, path: str | Path) -> Path:

@@ -148,3 +148,20 @@ def test_empty_template_writes_a_readable_file(tmp_path):
     path = write_xyt([], tmp_path / "empty.xyt")
     assert path.is_file()
     assert read_xyt(path) == []
+
+
+def test_xyt_filter_reads_y_from_the_bottom_as_mindtct_writes_it(tmp_path):
+    """mindtct's default .xyt is bottom-origin; the keep mask is top-origin.
+
+    Measured on FVC2004: read bottom-origin, 100% of minutiae land on the finger; read
+    top-origin, 90.6%. Getting this wrong drops real minutiae and keeps invented ones.
+    """
+    from fpe.eval.abstain import filter_xyt_file
+
+    keep = np.ones((100, 50), dtype=bool)
+    keep[:20] = False                      # decline the top 20 rows of the image
+    xyt = write_xyt([Minutia(10, 90, 0, 50),   # y=90 from bottom -> row 9: declined
+                     Minutia(10, 5, 0, 50)],   # y=5 from bottom -> row 94: kept
+                    tmp_path / "t.xyt")
+    assert filter_xyt_file(xyt, keep) == 1
+    assert [m.y for m in read_xyt(xyt)] == [5]

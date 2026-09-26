@@ -41,6 +41,9 @@ def main() -> int:
     )
     ap.add_argument("--checkpoint", default=str(ROOT / "data" / "work" / "wafen" / "best.pt"),
                     help="WAFEN weights (only used with --method WAFEN)")
+    ap.add_argument("--abstain", type=float, default=None,
+                    help="WAFEN confidence threshold: decline foreground below it and drop "
+                         "minutiae near declined pixels (plan U9). Default: coverage 1.0")
     ap.add_argument("--notes", default=None)
     ap.add_argument("--dry-run", action="store_true", help="do not write to the registry")
     args = ap.parse_args()
@@ -51,6 +54,7 @@ def main() -> int:
     data_root = Path(args.data_root) if args.data_root else ROOT / "data" / "raw" / args.dataset
     work_dir = Path(args.work_dir) if args.work_dir else ROOT / "data" / "work" / (
         f"{args.dataset}_{args.subset or 'all'}_{args.method}"
+        + (f"_t{args.abstain:.2f}" if args.abstain is not None else "")
     )
 
     label = f"{args.dataset}/{args.subset}" if args.subset else args.dataset
@@ -63,7 +67,8 @@ def main() -> int:
         from fpe.models.wafen_enhancer import WafenEnhancer
 
         torch.set_num_threads(4)  # CPU timing, comparable with pyfing's; PROJECT_RULES.md cap
-        enhancer = WafenEnhancer(args.checkpoint, cache_dir=work_dir)
+        enhancer = WafenEnhancer(args.checkpoint, cache_dir=work_dir,
+                                 abstain_threshold=args.abstain)
     elif args.method != "none":
         from fpe.models.pyfing_baseline import PyfingEnhancer
 
@@ -75,6 +80,7 @@ def main() -> int:
         work_dir=work_dir,
         subset=args.subset,
         preprocess=enhancer,
+        postprocess=getattr(enhancer, "filter_template", None),
         impostor=args.impostor,
         n_resamples=args.bootstrap,
         seed=args.seed,
@@ -84,6 +90,7 @@ def main() -> int:
     m = result.metrics
     if enhancer is not None:
         m.update(enhancer.inference_seconds)
+        m.update(getattr(enhancer, "abstention_metrics", {}))
     print(
         f"\n  EER {m['eer']:.4f}  "
         f"95% CI [{m['eer_ci_low']:.4f}, {m['eer_ci_high']:.4f}]\n"
@@ -93,6 +100,9 @@ def main() -> int:
     )
     if "nfiq2_mean" in m:
         print(f"  NFIQ 2 mean {m['nfiq2_mean']:.1f}  median {m['nfiq2_median']:.0f}")
+    if "coverage_mean" in m:
+        print(f"  coverage {m['coverage_mean']:.1%} of foreground  "
+              f"minutiae dropped/img {m['minutiae_dropped_mean']:.1f}")
     if "inference_mean_s" in m:
         print(f"  enhancement {m['inference_mean_s']*1000:.0f} ms/image on CPU "
               f"(n={m['inference_n']}, warm-up excluded)")
@@ -116,6 +126,8 @@ def main() -> int:
                 "checkpoint_sha256": hashlib.sha256(
                     Path(args.checkpoint).read_bytes()).hexdigest()}
                if args.method == "WAFEN" else {}),
+            **({"abstain_threshold": args.abstain, "guard_px": 8}
+               if args.abstain is not None else {}),
         },
         manifest_path=manifest,
         notes=args.notes,
