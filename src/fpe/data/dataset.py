@@ -124,11 +124,17 @@ class WafenDataset(Dataset):
             mask = data["mask"].astype(np.float32)
             orientation = data["orientation"].astype(np.float32)
             period = data["period"].astype(np.float32)
+            # Real prints have no clean master: their ridge target is the SNFEN teacher's
+            # output, cached with the rest (fpe.data.real), already 1 = "ridge here".
+            cached_ridge = data["ridge"] if "ridge" in data.files else None
         image = load_greyscale(sample.image).astype(np.float32) / 255.0
-        ridge = (load_greyscale(sample.master).astype(np.float32) / 255.0)
-        # Anguli masters are white background with black ridges; the head predicts ridge
-        # presence, so invert to make 1 mean "ridge here".
-        ridge = 1.0 - ridge
+        if cached_ridge is not None:
+            ridge = cached_ridge.astype(np.float32) / 255.0
+        else:
+            ridge = (load_greyscale(sample.master).astype(np.float32) / 255.0)
+            # Anguli masters are white background with black ridges; the head predicts
+            # ridge presence, so invert to make 1 mean "ridge here".
+            ridge = 1.0 - ridge
         if not (image.shape == mask.shape == orientation.shape == ridge.shape):
             raise ValueError(
                 f"{sample.key}: shapes disagree -- image {image.shape}, mask "

@@ -187,7 +187,7 @@ def train(
     train_dataset, val_dataset, *, config: TrainConfig | None = None,
     model_config: WafenConfig | None = None, weights: LossWeights | None = None,
     out_dir: str | Path = "data/work/wafen", resume: bool = True,
-    progress=print,
+    init_weights: str | Path | None = None, progress=print,
 ) -> tuple[Wafen, History]:
     """Train WAFEN. Returns the model with the best validation ridge loss loaded."""
     config = config or TrainConfig()
@@ -223,6 +223,13 @@ def train(
 
     history = History()
     start_epoch = 0
+    if init_weights is not None and not (resume and checkpoint_path.is_file()):
+        # Fine-tuning: start from trained weights, with a fresh optimiser and schedule --
+        # a new phase of training, not a resumed one. Ignored once this run has its own
+        # checkpoint, so a crash-resume continues the fine-tune rather than restarting it.
+        model.load_state_dict(torch.load(init_weights, map_location=device,
+                                         weights_only=False)["model"])
+        progress(f"initialised from {init_weights}")
     if resume and checkpoint_path.is_file():
         state = torch.load(checkpoint_path, map_location=device, weights_only=False)
         model.load_state_dict(state["model"])

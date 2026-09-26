@@ -315,3 +315,20 @@ def test_period_loss_falls_back_to_the_mask_without_a_validity_target():
         "period": torch.full((1, 1, 32, 32), 9.0),
     })
     assert np.isfinite(parts["period"]) and torch.isfinite(total)
+
+
+def test_real_print_ridge_target_comes_from_the_cache(corpus):
+    """Real prints have no master; their SNFEN-teacher ridge map is cached (fpe.data.real)."""
+    samples, supervision = corpus
+    path = supervision / "fp_1" / "1_1.npz"
+    with np.load(path) as data:
+        arrays = {k: data[k] for k in data.files}
+    teacher = np.zeros_like(arrays["mask"], dtype=np.uint8)
+    teacher[:, ::2] = 255                                  # 1 = "ridge here", as SNFEN renders
+    with path.open("wb") as fh:
+        np.savez_compressed(fh, **arrays, ridge=teacher)
+
+    real = AnguliSample(finger_id="1", bucket="fp_1", impression=1, master=None,
+                        image=samples[0].image, split="train")
+    _, targets = WafenDataset([real], supervision)._load(real)
+    assert np.array_equal(targets["ridge"], teacher / 255.0)

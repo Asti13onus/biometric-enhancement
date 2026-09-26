@@ -59,9 +59,16 @@ def main() -> int:
         return 0
 
     started = time.perf_counter()
+    failed = []
     try:
         for n, (sample, dpi) in enumerate(todo, start=1):
-            build_real_sample(sample, args.out, dpi=dpi)
+            try:
+                build_real_sample(sample, args.out, dpi=dpi)
+            except (ValueError, OSError) as exc:
+                # One unreadable or pathological print must not stop the other thousand;
+                # it simply gets no cache and is left out of training. Counted, not hidden.
+                failed.append(sample.image)
+                print(f"  skipped {sample.image.name}: {exc}", flush=True)
             if n % args.report_every == 0 or n == len(todo):
                 rate = (time.perf_counter() - started) / n
                 print(f"  {n:,}/{len(todo):,}  {rate:.2f} s/img  "
@@ -69,7 +76,8 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\ninterrupted; progress is saved -- re-run to resume")
         return 130
-    print(f"done in {(time.perf_counter() - started) / 60:.1f} min -> {args.out}")
+    print(f"done in {(time.perf_counter() - started) / 60:.1f} min -> {args.out}  "
+          f"({len(failed)} skipped)")
     return 0
 
 

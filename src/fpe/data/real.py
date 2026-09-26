@@ -77,12 +77,19 @@ def build_real_sample(sample: AnguliSample, out_root: str | Path, *, dpi: int = 
 
     pf = load_pyfing()
     image = load_greyscale(sample.image)
+    # Teachers always run at 500 dpi. pyfing's SNFEN rescales its inputs inconsistently at
+    # other resolutions -- at 569 dpi (FVC2002 DB2) the image and period map come back at
+    # different sizes and it crashes. The declared dpi is kept in `meta`; the error is
+    # small (512 vs 500), and SNFFE measures ridge period from the image either way.
+    teacher_dpi = 500
     with pyfing_cpu():
-        mask = pf.fingerprint_segmentation(image, dpi=dpi, method="SUFS")
-        orientation = pf.orientation_field_estimation(image, mask, dpi=dpi, method="SNFOE")
-        period = pf.frequency_estimation(image, orientation, mask, dpi=dpi, method="SNFFE")
-        enhanced = pf.fingerprint_enhancement(image, orientation, period, mask, dpi=dpi,
-                                              method="SNFEN")
+        mask = pf.fingerprint_segmentation(image, dpi=teacher_dpi, method="SUFS")
+        orientation = pf.orientation_field_estimation(image, mask, dpi=teacher_dpi,
+                                                      method="SNFOE")
+        period = pf.frequency_estimation(image, orientation, mask, dpi=teacher_dpi,
+                                         method="SNFFE")
+        enhanced = pf.fingerprint_enhancement(image, orientation, period, mask,
+                                              dpi=teacher_dpi, method="SNFEN")
     fg = np.asarray(mask) > 0
     # SNFEN renders ridges near-white, so its intensity already means "ridge here" -- the
     # same sense as the inverted Anguli master. Outside the mask there is no ridge.

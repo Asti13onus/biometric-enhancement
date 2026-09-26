@@ -35,6 +35,14 @@ SUPERVISION = ROOT / "data" / "processed" / "supervision"
 CANARY_THRESHOLD = 0.35
 
 
+class MixedDataset(torch.utils.data.ConcatDataset):
+    """ConcatDataset that forwards `set_epoch`, so every part sees fresh damage each epoch."""
+
+    def set_epoch(self, epoch: int) -> None:
+        for part in self.datasets:
+            part.set_epoch(epoch)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -66,6 +74,14 @@ def main() -> int:
     ap.add_argument("--skip-canary", action="store_true")
     ap.add_argument("--no-resume", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="do not write the registry")
+    ap.add_argument("--real-supervision", type=Path, default=None,
+                    help="also train on real non-test prints labelled by "
+                         "scripts/build_real_supervision.py; validation then uses the "
+                         "real val split, since real prints are what is being fixed")
+    ap.add_argument("--real-repeat", type=int, default=4,
+                    help="oversample the ~1k real prints against ~10k Anguli")
+    ap.add_argument("--init-from", type=Path, default=None,
+                    help="start from these weights (fresh optimiser), e.g. best.pt")
     args = ap.parse_args()
 
     samples = [s for s in index_corpus(args.corpus)
@@ -88,6 +104,21 @@ def main() -> int:
     torch.set_num_threads(args.threads)
     cv2.setNumThreads(args.threads)
 
+    real = {"train": [], "val": []}
+    if args.real_supervision:
+        from fpe.data.real import index_real
+
+        for sample, _ in index_real(ROOT / "docs" / "datasets" / "manifests",
+                                    ROOT / "data" / "raw"):
+            if supervision_path(sample, args.real_supervision).is_file():
+                real[sample.split].append(sample)
+        if not real["train"] or not real["val"]:
+            print(f"no real supervision under {args.real_supervision}; "
+                  f"run scripts/build_real_supervision.py first")
+            return 1
+        print(f"real prints: {len(real['train']):,} train (x{args.real_repeat}), "
+              f"{len(real['val']):,} val")
+
     augment = AugmentConfig(patch=args.patch)
     datasets = {
         "train": WafenDataset(by_split["train"], args.supervision, config=augment,
@@ -97,6 +128,13 @@ def main() -> int:
         "val": WafenDataset(by_split["val"], args.supervision, config=augment,
                             wear=WearConfig(), augment=False, seed=args.seed),
     }
+    if real["train"]:
+        real_train = WafenDataset(real["train"] * args.real_repeat, args.real_supervision,
+                                  config=augment, wear=WearConfig(), augment=True,
+                                  seed=args.seed)
+        datasets["train"] = MixedDataset([datasets["train"], real_train])
+        datasets["val"] = WafenDataset(real["val"], args.real_supervision, config=augment,
+                                       wear=WearConfig(), augment=False, seed=args.seed)
     model_config = WafenConfig()
     device = resolve_device(args.device)
     print(f"device {device}  |  {Wafen(model_config).parameter_count():,} parameters")
@@ -133,7 +171,7 @@ def main() -> int:
           f"{config.batch_size * config.accumulate}\n")
     model, history = train(
         datasets["train"], datasets["val"], config=config, model_config=model_config,
-        out_dir=args.out_dir, resume=not args.no_resume,
+        out_dir=args.out_dir, resume=not args.no_resume, init_weights=args.init_from,
     )
 
     best = history.epochs[history.best_epoch] if history.epochs else {}
@@ -145,7 +183,8 @@ def main() -> int:
 
     log_run(
         experiment="wafen-train",
-        dataset=f"{args.corpus.name} (wear-degraded)",
+        dataset=f"{args.corpus.name} (wear-degraded)"
+        + (" + real non-test prints" if real["train"] else ""),
         method="wafen",
         metrics={
             "best_val_ridge": history.best_val_ridge,
@@ -154,10 +193,16 @@ def main() -> int:
             **{f"val_{k}": v for k, v in best.get("val", {}).items()},
             **{f"train_{k}": v for k, v in best.get("train", {}).items()},
             "n_train": len(by_split["train"]), "n_val": len(by_split["val"]),
+            "n_real_train": len(real["train"]), "n_real_val": len(real["val"]),
         },
         config={**config.to_dict(), "model": model_config.to_dict(),
-                "patch": args.patch},
-        notes="Trained on synthetic Anguli only; no real image appears in training.",
+                "patch": args.patch,
+                "real_repeat": args.real_repeat if real["train"] else 0,
+                "init_from": str(args.init_from) if args.init_from else None},
+        notes=("Anguli + real FVC2000/FVC2002/U.are.U prints with pyfing-teacher targets; "
+               "FVC2004 and CrossMatch held out. Val is the real val split."
+               if real["train"] else
+               "Trained on synthetic Anguli only; no real image appears in training."),
     )
     print("registry row appended -> results/registry/runs.jsonl")
     return 0
