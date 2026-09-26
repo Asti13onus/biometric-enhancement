@@ -118,6 +118,13 @@ class LossWeights:
     period: float = 0.1
     """Period is in pixels, roughly an order of magnitude larger than the other terms."""
     segmentation: float = 0.5
+    consistency: float = 1.0
+    """Disagreement between the reconstructions of two differently-damaged views of the
+    same print (paired training only; applied in the train loop, which is the only place
+    that sees both views). The matcher compares impressions of one finger, so genuine
+    scores pay for exactly this variance -- and no per-image loss can see it. Session 10's
+    closing finding: NFIQ 2, pixel overlap and minutiae-site error all improved while EER
+    followed none of them."""
     minutiae: float = 2.0
     """Ridge error inside disks over the target's minutiae (endings and bifurcations).
 

@@ -104,7 +104,7 @@ def test_history_records_every_head_separately(dataset, tmp_path):
     record = history.epochs[0]
     for split in ("train", "val"):
         assert set(record[split]) == {
-            "ridge", "confidence", "orientation", "period", "segmentation"
+            "ridge", "confidence", "orientation", "period", "segmentation", "minutiae"
         }, split
         assert all(np.isfinite(v) for v in record[split].values()), split
 

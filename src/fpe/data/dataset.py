@@ -127,9 +127,14 @@ class WafenDataset(Dataset):
         wear: WearConfig | None = None,
         augment: bool = True,
         seed: int = 0,
+        pairs: bool = False,
     ) -> None:
         if not samples:
             raise ValueError("no samples")
+        self.pairs = pairs
+        """Two independently-damaged, pixel-aligned views per item, for the consistency
+        loss: the matcher compares impressions of the same finger, so reconstructing the
+        same finger differently under different damage is what genuine scores pay for."""
         self.samples = samples
         self.root = Path(supervision_root)
         self.config = config or AugmentConfig()
@@ -218,17 +223,22 @@ class WafenDataset(Dataset):
             out["orientation"] = rotate_orientation(-out["orientation"], 0.0)
         return image, out
 
-    def _crop(self, image, targets, evidence, rng):
-        """A patch that actually contains finger, where one can be found."""
+    def _crop(self, images, targets, evidences, rng):
+        """A shared patch that actually contains finger, where one can be found.
+
+        `images` and `evidences` are lists so that paired views of the same print are
+        cut with the *same* window -- the pair must stay pixel-aligned or a consistency
+        loss between them would measure the framing, not the model.
+        """
         size = self.config.patch
-        h, w = image.shape
+        h, w = images[0].shape
         if h < size or w < size:
             pad_y, pad_x = max(0, size - h), max(0, size - w)
             pad = ((0, pad_y), (0, pad_x))
-            image = np.pad(image, pad, constant_values=1.0)
-            evidence = np.pad(evidence, pad, constant_values=1.0)
+            images = [np.pad(i, pad, constant_values=1.0) for i in images]
+            evidences = [np.pad(e, pad, constant_values=1.0) for e in evidences]
             targets = {k: np.pad(v, pad, constant_values=0.0) for k, v in targets.items()}
-            h, w = image.shape
+            h, w = images[0].shape
 
         best = None
         for _ in range(self.config.foreground_tries):
@@ -241,8 +251,23 @@ class WafenDataset(Dataset):
                 break
         _, y, x = best
         window = (slice(y, y + size), slice(x, x + size))
-        return (image[window], {k: v[window] for k, v in targets.items()},
-                evidence[window])
+        return ([i[window] for i in images],
+                {k: v[window] for k, v in targets.items()},
+                [e[window] for e in evidences])
+
+    def _degrade_view(self, image, targets, rng):
+        """One independently-damaged view of a clean print: (degraded, evidence)."""
+        severity = float(rng.uniform(*self.config.severity)) if self.augment else 0.5
+        # Reuse the teacher's orientation rather than letting the wear model re-derive a
+        # rough one: better grounded, and it removes a structure tensor per item.
+        result = self.degrade(image, seed=int(rng.integers(0, 2**31 - 1)),
+                              severity=severity, mask=targets["mask"],
+                              orientation=targets["orientation"])
+        degraded, evidence = result.image, result.evidence
+        if self.augment:
+            gamma = float(rng.uniform(*self.config.gamma))
+            degraded = np.clip(degraded, 1e-6, 1.0) ** gamma
+        return degraded, evidence
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         sample = self.samples[index]
@@ -252,22 +277,22 @@ class WafenDataset(Dataset):
         if self.augment:
             image, targets = self._geometric(image, targets, rng)
 
-        severity = float(rng.uniform(*self.config.severity)) if self.augment else 0.5
-        # Reuse the teacher's orientation rather than letting the wear model re-derive a
-        # rough one: better grounded, and it removes a structure tensor per item.
-        result = self.degrade(image, seed=int(rng.integers(0, 2**31 - 1)),
-                              severity=severity, mask=targets["mask"],
-                              orientation=targets["orientation"])
-        degraded, evidence = result.image, result.evidence
-
-        if self.augment:
-            gamma = float(rng.uniform(*self.config.gamma))
-            degraded = np.clip(degraded, 1e-6, 1.0) ** gamma
-
-        degraded, targets, evidence = self._crop(degraded, targets, evidence, rng)
-        targets["evidence"] = evidence
+        views = [self._degrade_view(image, targets, rng)
+                 for _ in range(2 if self.pairs else 1)]
+        images, evidences = [v[0] for v in views], [v[1] for v in views]
+        images, targets, evidences = self._crop(images, targets, evidences, rng)
         targets["minutiae"] = minutia_weight_map(targets["ridge"], targets["mask"])
 
-        tensors = {k: torch.from_numpy(np.ascontiguousarray(v)).float().unsqueeze(0)
-                   for k, v in targets.items()}
-        return torch.from_numpy(np.ascontiguousarray(degraded)).float().unsqueeze(0), tensors
+        def tensor(array):
+            return torch.from_numpy(np.ascontiguousarray(array)).float().unsqueeze(0)
+
+        if not self.pairs:
+            tensors = {k: tensor(v) for k, v in targets.items()}
+            tensors["evidence"] = tensor(evidences[0])
+            return tensor(images[0]), tensors
+        # Paired: (2, 1, H, W) images; every target carries the view axis too, so a batch
+        # flattens to 2B ordinary items. Only evidence differs between the views -- it
+        # describes the damage, and the damage is the only thing that differs.
+        tensors = {k: torch.stack([tensor(v)] * 2) for k, v in targets.items()}
+        tensors["evidence"] = torch.stack([tensor(e) for e in evidences])
+        return torch.stack([tensor(i) for i in images]), tensors

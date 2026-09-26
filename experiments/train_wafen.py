@@ -42,6 +42,10 @@ class MixedDataset(torch.utils.data.ConcatDataset):
         for part in self.datasets:
             part.set_epoch(epoch)
 
+    @property
+    def pairs(self) -> bool:
+        return any(getattr(part, "pairs", False) for part in self.datasets)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
@@ -80,6 +84,10 @@ def main() -> int:
                          "real val split, since real prints are what is being fixed")
     ap.add_argument("--real-repeat", type=int, default=4,
                     help="oversample the ~1k real prints against ~10k Anguli")
+    ap.add_argument("--pairs", action="store_true",
+                    help="two independently-damaged, pixel-aligned views per item plus a "
+                         "consistency loss between their reconstructions -- each item "
+                         "then costs two images of VRAM, so halve --batch-size")
     ap.add_argument("--init-from", type=Path, default=None,
                     help="start from these weights (fresh optimiser), e.g. best.pt")
     args = ap.parse_args()
@@ -122,19 +130,22 @@ def main() -> int:
     augment = AugmentConfig(patch=args.patch)
     datasets = {
         "train": WafenDataset(by_split["train"], args.supervision, config=augment,
-                              wear=WearConfig(), augment=True, seed=args.seed),
+                              wear=WearConfig(), augment=True, seed=args.seed,
+                              pairs=args.pairs),
         # Validation is deterministic: no augmentation, fixed mid severity, so the number
         # moves only when the model does.
         "val": WafenDataset(by_split["val"], args.supervision, config=augment,
-                            wear=WearConfig(), augment=False, seed=args.seed),
+                            wear=WearConfig(), augment=False, seed=args.seed,
+                            pairs=args.pairs),
     }
     if real["train"]:
         real_train = WafenDataset(real["train"] * args.real_repeat, args.real_supervision,
                                   config=augment, wear=WearConfig(), augment=True,
-                                  seed=args.seed)
+                                  seed=args.seed, pairs=args.pairs)
         datasets["train"] = MixedDataset([datasets["train"], real_train])
         datasets["val"] = WafenDataset(real["val"], args.real_supervision, config=augment,
-                                       wear=WearConfig(), augment=False, seed=args.seed)
+                                       wear=WearConfig(), augment=False, seed=args.seed,
+                                       pairs=args.pairs)
     model_config = WafenConfig()
     device = resolve_device(args.device)
     print(f"device {device}  |  {Wafen(model_config).parameter_count():,} parameters")
@@ -198,6 +209,7 @@ def main() -> int:
         config={**config.to_dict(), "model": model_config.to_dict(),
                 "patch": args.patch,
                 "real_repeat": args.real_repeat if real["train"] else 0,
+                "pairs": args.pairs,
                 "init_from": str(args.init_from) if args.init_from else None},
         notes=("Anguli + real FVC2000/FVC2002/U.are.U prints with pyfing-teacher targets; "
                "FVC2004 and CrossMatch held out. Val is the real val split."

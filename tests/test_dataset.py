@@ -402,3 +402,42 @@ def test_loss_charges_extra_at_minutiae_and_only_when_the_map_is_present():
     no_map_total, _ = WafenLoss()(out, base)
     assert "minutiae" in parts_hi and parts_hi["minutiae"] > 0
     assert float(total_hi) > float(no_map_total)
+
+
+# -- paired views for the consistency loss -------------------------------------------
+
+def test_paired_views_share_targets_and_differ_only_in_damage(corpus):
+    samples, supervision = corpus
+    image, targets = WafenDataset(samples, supervision, pairs=True)[0]
+    assert image.shape[0] == 2 and image.dim() == 4
+    assert not torch.equal(image[0], image[1])          # different damage
+    for name in ("mask", "ridge", "orientation", "minutiae"):
+        assert torch.equal(targets[name][0], targets[name][1]), name  # same finger, same frame
+    assert not torch.equal(targets["evidence"][0], targets["evidence"][1])
+
+
+def test_consistency_is_zero_for_identical_views_and_positive_otherwise():
+    from types import SimpleNamespace
+
+    from fpe.train import _consistency
+
+    ridge = torch.rand(2, 1, 16, 16)
+    mask = torch.ones(4, 1, 16, 16)
+    same = SimpleNamespace(ridge=torch.cat([ridge[:1], ridge[:1], ridge[1:], ridge[1:]]))
+    assert float(_consistency(same, mask)) == 0.0
+    different = SimpleNamespace(ridge=torch.cat([ridge[:1], 1 - ridge[:1],
+                                                 ridge[1:], ridge[1:]]))
+    assert float(_consistency(different, mask)) > 0.1
+
+
+def test_paired_batches_flatten_to_adjacent_views(corpus):
+    from torch.utils.data import DataLoader
+
+    from fpe.train import _to_device
+
+    samples, supervision = corpus
+    dataset = WafenDataset(samples * 3, supervision, pairs=True)
+    batch = next(iter(DataLoader(dataset, batch_size=3)))
+    image, targets, paired = _to_device(batch, torch.device("cpu"))
+    assert paired and image.shape[0] == 6
+    assert torch.equal(targets["ridge"][0], targets["ridge"][1])  # views of item 0 adjacent

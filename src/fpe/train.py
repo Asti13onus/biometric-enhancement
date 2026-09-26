@@ -95,7 +95,27 @@ def _save_atomic(obj, path: Path) -> None:
 
 def _to_device(batch, device):
     image, targets = batch
-    return image.to(device), {k: v.to(device) for k, v in targets.items()}
+    image = image.to(device)
+    targets = {k: v.to(device) for k, v in targets.items()}
+    if image.dim() == 5:
+        # Paired views (B, 2, 1, H, W): flatten to 2B ordinary items. Views of one item
+        # stay adjacent, which is what _consistency relies on.
+        image = image.flatten(0, 1)
+        targets = {k: v.flatten(0, 1) for k, v in targets.items()}
+        return image, targets, True
+    return image, targets, False
+
+
+def _consistency(output, mask: torch.Tensor) -> torch.Tensor:
+    """Masked L1 between the ridge maps of the two views of each pair.
+
+    Views are adjacent in the flattened batch (see `_to_device`); the mask is identical
+    for both views by construction, so either view's copy serves as the weight.
+    """
+    ridge = output.ridge.unflatten(0, (-1, 2))
+    weights = mask.unflatten(0, (-1, 2))[:, 0]
+    gap = (ridge[:, 0] - ridge[:, 1]).abs()
+    return (gap * weights).sum() / weights.sum().clamp_min(1e-6)
 
 
 @torch.no_grad()
@@ -106,8 +126,11 @@ def evaluate(model: Wafen, loader: DataLoader, criterion: WafenLoss,
     totals: dict[str, float] = {}
     batches = 0
     for batch in loader:
-        image, targets = _to_device(batch, device)
-        _, parts = criterion(model(image), targets)
+        image, targets, paired = _to_device(batch, device)
+        output = model(image)
+        _, parts = criterion(output, targets)
+        if paired:
+            parts["consistency"] = float(_consistency(output, targets["mask"]).detach())
         for name, value in parts.items():
             totals[name] = totals.get(name, 0.0) + value
         batches += 1
@@ -199,8 +222,10 @@ def train(
     torch.manual_seed(config.seed)
     device = resolve_device(config.device)
     # Fail now rather than part-way through an epoch. Measured: batch 8 at 256px peaks at
-    # 2.56 GB, batch 4 at 1.97 GB, batch 8 at 192px at 1.04 GB.
-    require_vram(device, 0.35 * config.batch_size, "training")
+    # 2.56 GB, batch 4 at 1.97 GB, batch 8 at 192px at 1.04 GB. A paired item is two
+    # images, so it counts double.
+    images_per_item = 2 if getattr(train_dataset, "pairs", False) else 1
+    require_vram(device, 0.35 * config.batch_size * images_per_item, "training")
     model = Wafen(model_config or WafenConfig()).to(device)
     criterion = WafenLoss(weights)
     optimiser = torch.optim.AdamW(model.parameters(), lr=config.learning_rate,
@@ -252,9 +277,14 @@ def train(
         for index, batch in enumerate(loaders["train"]):
             if index >= steps_per_epoch:
                 break
-            image, targets = _to_device(batch, device)
+            image, targets, paired = _to_device(batch, device)
             with torch.autocast("cuda", enabled=use_amp):
-                total, parts = criterion(model(image), targets)
+                output = model(image)
+                total, parts = criterion(output, targets)
+                if paired:
+                    consistency = _consistency(output, targets["mask"])
+                    total = total + criterion.weights.consistency * consistency
+                    parts["consistency"] = float(consistency.detach())
             if not math.isfinite(sum(parts.values())):
                 # One NaN forward also poisons BatchNorm's running statistics, so every
                 # later epoch -- validation included -- is NaN too. Stop at the first one.
