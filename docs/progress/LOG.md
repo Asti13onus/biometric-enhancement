@@ -86,6 +86,20 @@ prints. 51 minutes of training on synthetic data alone gives estimates clearly w
 than Cappelli's released networks. The fix is data, not post-processing: the model must see
 real prints.
 
+**Distillation, done — fine-tune on Anguli + 1,048 real teacher-labelled prints**
+- Labelled FVC2000, FVC2002, U.are.U (1,160 prints, 0 skipped) with SUFS/SNFOE/SNFFE and
+  SNFEN as ridge target. pyfing's SNFEN crashes at 569 dpi (image and period map
+  rescaled to different sizes), so the teachers run at 500 dpi throughout.
+- Fine-tune: 8 × 400 steps at 1e-4 from `best.pt`, real prints ×4. Real-val ridge
+  0.399 → **0.342**, orientation 0.106 → 0.059.
+- **FVC2004: EER 0.1347 [0.122, 0.149]**, against 0.1353 before. **No change.**
+  Minutiae/img 93 → 80, NFIQ 2 59.5 (= SNFEN's 59.2), CPU 444 ms/img. Still worse than
+  no enhancement (0.0991).
+- Reading: lower loss against SNFEN's output did not buy matching accuracy. The prints
+  look as good as SNFEN's to NFIQ 2 and carry 20% more minutiae than SNFEN's (80 vs 66).
+  The loss rewards pixel overlap, and matching is decided by the ridge *endings* and
+  *junctions* that pixel overlap barely weighs.
+
 **Next — teacher distillation on real, non-test prints**
 - Label real prints from the *non-test* datasets (FVC2000/2002, Neurotechnology, MINEX,
   L3-SF; FVC2004 stays held out) with the pyfing teachers (SUFS, SNFOE, SNFFE, and SNFEN

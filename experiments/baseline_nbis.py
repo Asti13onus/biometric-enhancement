@@ -132,7 +132,7 @@ def main() -> int:
             "impostor_mode": args.impostor,
             "bootstrap": args.bootstrap,
             "seed": args.seed,
-            **({"checkpoint": str(Path(args.checkpoint).relative_to(ROOT)),
+            **({"checkpoint": str(Path(args.checkpoint).resolve().relative_to(ROOT)),
                 "checkpoint_sha256": hashlib.sha256(
                     Path(args.checkpoint).read_bytes()).hexdigest()}
                if args.method.startswith("WAFEN") else {}),
