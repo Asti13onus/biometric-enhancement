@@ -128,6 +128,7 @@ class WafenDataset(Dataset):
         augment: bool = True,
         seed: int = 0,
         pairs: bool = False,
+        photometric: bool = False,
     ) -> None:
         if not samples:
             raise ValueError("no samples")
@@ -135,6 +136,12 @@ class WafenDataset(Dataset):
         """Two independently-damaged, pixel-aligned views per item, for the consistency
         loss: the matcher compares impressions of the same finger, so reconstructing the
         same finger differently under different damage is what genuine scores pay for."""
+        self.photometric = photometric
+        """Views differ by contrast / clarity jitter instead of the wear model (arm two,
+        CDC-GAN's recipe): a real print is already degraded, so damaging it further with
+        *our* synthetic wear would drag arm one's assumption into arm two. Requires a
+        cache that carries `evidence` (the annotator's confidence), since no wear model
+        runs to provide the confidence target."""
         self.samples = samples
         self.root = Path(supervision_root)
         self.config = config or AugmentConfig()
@@ -167,6 +174,8 @@ class WafenDataset(Dataset):
             # Real prints have no clean master: their ridge target is the SNFEN teacher's
             # output, cached with the rest (fpe.data.real), already 1 = "ridge here".
             cached_ridge = data["ridge"] if "ridge" in data.files else None
+            cached_evidence = (data["evidence"].astype(np.float32)
+                               if "evidence" in data.files else None)
         image = load_greyscale(sample.image).astype(np.float32) / 255.0
         if cached_ridge is not None:
             ridge = cached_ridge.astype(np.float32) / 255.0
@@ -182,8 +191,17 @@ class WafenDataset(Dataset):
             )
         low, high = PERIOD_RANGE
         period_valid = ((period >= low) & (period <= high)).astype(np.float32)
-        return image, {"mask": mask, "ridge": ridge, "orientation": orientation,
-                       "period": period, "period_valid": period_valid}
+        targets = {"mask": mask, "ridge": ridge, "orientation": orientation,
+                   "period": period, "period_valid": period_valid}
+        if self.photometric:
+            if cached_evidence is None:
+                raise ValueError(
+                    f"{sample.key}: photometric mode needs a cache with `evidence` "
+                    f"(the annotator's confidence); build it with "
+                    f"scripts/build_pseudo_annotations.py"
+                )
+            targets["evidence"] = cached_evidence
+        return image, targets
 
     def _geometric(self, image, targets, rng):
         """Rotate, scale, translate and flip -- image and every target together."""
@@ -215,6 +233,8 @@ class WafenDataset(Dataset):
         out["orientation"] = rotate_orientation(
             warp(targets["orientation"], 0.0, cv2.INTER_NEAREST), -np.deg2rad(angle)
         )
+        if "evidence" in targets:
+            out["evidence"] = warp(targets["evidence"], 0.0, cv2.INTER_LINEAR)
 
         if rng.random() < cfg.p_hflip:
             image = np.ascontiguousarray(image[:, ::-1])
@@ -255,6 +275,17 @@ class WafenDataset(Dataset):
                 {k: v[window] for k, v in targets.items()},
                 [e[window] for e in evidences])
 
+    def _photometric_view(self, image, rng):
+        """Contrast / clarity jitter only: gamma, linear contrast, mild blur, sensor
+        noise. Fixed ranges; this is CDC-GAN's notion of two views of one print."""
+        out = np.clip(image, 1e-6, 1.0) ** float(rng.uniform(*self.config.gamma))
+        out = np.clip((out - 0.5) * float(rng.uniform(0.7, 1.3)) + 0.5, 0.0, 1.0)
+        sigma = float(rng.uniform(0.0, 1.0))
+        if sigma > 0.2:
+            out = cv2.GaussianBlur(out, (0, 0), sigma)
+        out = out + rng.normal(0.0, float(rng.uniform(0.0, 0.03)), out.shape)
+        return np.clip(out, 0.0, 1.0).astype(np.float32)
+
     def _degrade_view(self, image, targets, rng):
         """One independently-damaged view of a clean print: (degraded, evidence)."""
         severity = float(rng.uniform(*self.config.severity)) if self.augment else 0.5
@@ -277,9 +308,16 @@ class WafenDataset(Dataset):
         if self.augment:
             image, targets = self._geometric(image, targets, rng)
 
-        views = [self._degrade_view(image, targets, rng)
-                 for _ in range(2 if self.pairs else 1)]
-        images, evidences = [v[0] for v in views], [v[1] for v in views]
+        if self.photometric:
+            evidence = targets.pop("evidence")
+            images = [self._photometric_view(image, rng)
+                      for _ in range(2 if self.pairs else 1)]
+            evidences = [evidence] * len(images)
+        else:
+            targets.pop("evidence", None)  # wear evidence supersedes any cached one
+            views = [self._degrade_view(image, targets, rng)
+                     for _ in range(2 if self.pairs else 1)]
+            images, evidences = [v[0] for v in views], [v[1] for v in views]
         images, targets, evidences = self._crop(images, targets, evidences, rng)
         targets["minutiae"] = minutia_weight_map(targets["ridge"], targets["mask"])
 

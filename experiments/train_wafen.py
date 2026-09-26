@@ -82,6 +82,11 @@ def main() -> int:
                     help="also train on real non-test prints labelled by "
                          "scripts/build_real_supervision.py; validation then uses the "
                          "real val split, since real prints are what is being fixed")
+    ap.add_argument("--real-mode", choices=["wear", "photometric"], default="wear",
+                    help="how real prints are presented: 'wear' damages them further with "
+                         "our wear model (arm one's distillation); 'photometric' jitters "
+                         "contrast/clarity only (arm two, CDC-style domain alignment) and "
+                         "needs a pseudo-annotation cache carrying `evidence`")
     ap.add_argument("--real-repeat", type=int, default=4,
                     help="oversample the ~1k real prints against ~10k Anguli")
     ap.add_argument("--pairs", action="store_true",
@@ -139,13 +144,15 @@ def main() -> int:
                             pairs=args.pairs),
     }
     if real["train"]:
+        photometric = args.real_mode == "photometric"
         real_train = WafenDataset(real["train"] * args.real_repeat, args.real_supervision,
                                   config=augment, wear=WearConfig(), augment=True,
-                                  seed=args.seed, pairs=args.pairs)
+                                  seed=args.seed, pairs=args.pairs,
+                                  photometric=photometric)
         datasets["train"] = MixedDataset([datasets["train"], real_train])
         datasets["val"] = WafenDataset(real["val"], args.real_supervision, config=augment,
                                        wear=WearConfig(), augment=False, seed=args.seed,
-                                       pairs=args.pairs)
+                                       pairs=args.pairs, photometric=photometric)
     model_config = WafenConfig()
     device = resolve_device(args.device)
     print(f"device {device}  |  {Wafen(model_config).parameter_count():,} parameters")
@@ -209,7 +216,7 @@ def main() -> int:
         config={**config.to_dict(), "model": model_config.to_dict(),
                 "patch": args.patch,
                 "real_repeat": args.real_repeat if real["train"] else 0,
-                "pairs": args.pairs,
+                "pairs": args.pairs, "real_mode": args.real_mode,
                 "init_from": str(args.init_from) if args.init_from else None},
         notes=("Anguli + real FVC2000/FVC2002/U.are.U prints with pyfing-teacher targets; "
                "FVC2004 and CrossMatch held out. Val is the real val split."

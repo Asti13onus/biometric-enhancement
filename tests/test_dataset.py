@@ -441,3 +441,37 @@ def test_paired_batches_flatten_to_adjacent_views(corpus):
     image, targets, paired = _to_device(batch, torch.device("cpu"))
     assert paired and image.shape[0] == 6
     assert torch.equal(targets["ridge"][0], targets["ridge"][1])  # views of item 0 adjacent
+
+
+# -- photometric mode (arm two: domain alignment) -------------------------------------
+
+def _with_evidence(supervision):
+    path = supervision / "fp_1" / "1_1.npz"
+    with np.load(path) as data:
+        arrays = {k: data[k] for k in data.files}
+    arrays.setdefault("ridge", (np.random.default_rng(0).random((SIZE, SIZE)) > 0.5)
+                      .astype(np.uint8) * 255)
+    arrays["evidence"] = np.full((SIZE, SIZE), 0.75, np.float16)
+    with path.open("wb") as fh:
+        np.savez_compressed(fh, **arrays)
+
+
+def test_photometric_mode_requires_cached_evidence(corpus):
+    samples, supervision = corpus
+    with pytest.raises(ValueError, match="evidence"):
+        WafenDataset(samples, supervision, photometric=True)[0]
+
+
+def test_photometric_pairs_keep_the_print_undamaged_and_share_evidence(corpus):
+    samples, supervision = corpus
+    _with_evidence(supervision)
+    dataset = WafenDataset(samples, supervision, photometric=True, pairs=True,
+                           augment=False)
+    image, targets = dataset[0]
+    assert image.shape[0] == 2
+    assert not torch.equal(image[0], image[1])            # jitter differs
+    assert torch.equal(targets["evidence"][0], targets["evidence"][1])
+    assert float(targets["evidence"].max()) <= 1.0
+    # photometric jitter is monotone-ish in intensity: ridge structure survives; the
+    # wear model's evidence destruction does not happen, so evidence stays the cache's
+    assert float(targets["evidence"].mean()) == pytest.approx(0.75, abs=0.01)
