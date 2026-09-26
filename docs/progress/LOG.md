@@ -136,6 +136,23 @@ real prints.
   endings/bifurcations of the teacher's map heavily). Diagnosed cause fits; cost ~2 h;
   outcome uncertain. Decision deferred to the supervisor conversation.
 
+**Minutia-aware loss (the last lever) — trained as designed, did not transfer**
+- New loss term: L1 on the ridge map inside 7 px disks over the target's skeleton
+  endpoints and bifurcations (crossing number), border artifacts excluded, weight 2.0 —
+  the heaviest in the objective. Fine-tuned 8 × 400 from wafen_ft.
+- It learned what it was told to: val minutiae-site error 0.276 → 0.226 (−18%), val
+  ridge 0.355 → 0.291 — both better than any previous run, no trade-off.
+- **FVC2004: EER 0.1376 [0.126, 0.148].** Within noise of plain wafen_ft (0.1347) and
+  the blend (0.1310). Minutiae/img 83.4. The pre-committed criterion (beat 0.1310 or the
+  lever is spent) says: spent.
+- The pattern across all 14 evaluations is now consistent and worth stating as a
+  finding: **every proxy we optimised improved — NFIQ 2, pixel overlap, minutiae-site
+  L1 — and the matcher moved for none of them.** What bozorth3 rewards is not per-image
+  fidelity to the teacher but *cross-impression consistency* of the reconstruction, which
+  none of our losses (or any per-image loss) sees. That is a diagnosis with a citation
+  trail, not an excuse: it names the requirement for any future attempt (pair-consistent
+  training) and closes the corrected-synthesis arm with a mechanism, not a shrug.
+
 **Next — teacher distillation on real, non-test prints**
 - Label real prints from the *non-test* datasets (FVC2000/2002, Neurotechnology, MINEX,
   L3-SF; FVC2004 stays held out) with the pyfing teachers (SUFS, SNFOE, SNFFE, and SNFEN
