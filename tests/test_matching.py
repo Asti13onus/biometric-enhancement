@@ -80,7 +80,8 @@ def test_oversized_templates_are_trimmed_by_quality_for_bozorth3(tmp_path):
     assert trimmed != big and trimmed.is_file()
     rows = trimmed.read_text().splitlines()
     assert len(rows) == BOZORTH_MAX_MINUTIAE
-    assert min(int(r.split()[3]) for r in rows) >= 50   # kept the high-quality tail
+    all_q = sorted((i % 100 for i in range(230)), reverse=True)
+    assert min(int(r.split()[3]) for r in rows) == all_q[BOZORTH_MAX_MINUTIAE - 1]
     small = tmp_path / "small.xyt"
     small.write_text("1 2 3 4\n", encoding="ascii")
     assert _within_bozorth_limit(small) == small        # untouched below the limit
