@@ -44,6 +44,7 @@ def _template_for(
     work_dir: Path,
     preprocess: Callable[[Path], Path] | None,
     postprocess: Callable[[Path, Path], Path] | None = None,
+    extract: Callable[[Path], Path] | None = None,
 ) -> tuple[Path | None, int, Path | None]:
     """Return (xyt path, minutia count, prepared image).
 
@@ -56,9 +57,14 @@ def _template_for(
         png = to_greyscale_png(source, cache_dir)
         if preprocess is not None:
             png = preprocess(png)
-        # mindtct cannot read PNG; lossless JPEG is byte-identical to it.
-        jpl = to_nbis_input(png, cache_dir)
-        xyt = run_mindtct(jpl, work_dir / jpl.stem)
+        if extract is not None:
+            # A second extraction chain (U11): spurious minutiae originate in
+            # extraction, so claims must survive a change of extractor.
+            xyt = extract(png)
+        else:
+            # mindtct cannot read PNG; lossless JPEG is byte-identical to it.
+            jpl = to_nbis_input(png, cache_dir)
+            xyt = run_mindtct(jpl, work_dir / jpl.stem)
         if postprocess is not None:
             xyt = postprocess(xyt, png)
     except (OSError, RuntimeError, ValueError):
@@ -77,6 +83,7 @@ def run_baseline(
     subset: str | None = None,
     preprocess: Callable[[Path], Path] | None = None,
     postprocess: Callable[[Path, Path], Path] | None = None,
+    extract: Callable[[Path], Path] | None = None,
     impostor: ImpostorMode = "all",
     n_resamples: int = 1000,
     seed: int = 0,
@@ -112,6 +119,7 @@ def run_baseline(
             work_dir=tmpl_dir,
             preprocess=preprocess,
             postprocess=postprocess,
+            extract=extract,
         )
         if prepared is not None:
             prepared_images.append(prepared)
