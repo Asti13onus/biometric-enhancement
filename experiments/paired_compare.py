@@ -59,6 +59,11 @@ def main() -> int:
 
     manifest = ROOT / "docs" / "datasets" / "manifests" / f"{args.dataset}.csv"
     data_root = ROOT / "data" / "raw" / args.dataset
+    if args.dataset == "minex":
+        # MINEX's canonical roster is the PNG conversion (headerless .gray is unreadable
+        # and the raw manifest includes calibration imagery) -- see experiments/benchmark.
+        manifest = ROOT / "data" / "processed" / "minex_png" / "minex_png.csv"
+        data_root = ROOT / "data" / "processed" / "minex_png"
     chain = "" if args.extractor == "mindtct" else "_leader"
 
     results = {}
@@ -76,7 +81,7 @@ def main() -> int:
         print(f"condition {side.upper()}: {label} ({args.extractor})")
         results[side] = (label, run_baseline(
             manifest_path=manifest, data_root=data_root, work_dir=work,
-            subset=args.subset,
+            subset=args.subset, max_impostor=30_000,
             preprocess=make_enhancer(method, ckpt, work),
             progress=lambda m: print(m), **kwargs))
 
