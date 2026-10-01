@@ -25,15 +25,47 @@ from fpe.eval.registry import read_runs  # noqa: E402
 METHOD_ORDER = {"none": 0, "GBFEN": 1, "SNFEN": 2}
 METHOD_LABEL = {"none": "No enhancement"}
 
+CHECKPOINT_LABEL = {
+    "wafen": "WAFEN (arm 1: corrected synthesis)",
+    "wafen_ft": "WAFEN distilled (arm 1 + teacher labels)",
+    "wafen_mn": "WAFEN minutia loss (arm 1)",
+    "wafen_pc": "WAFEN pair-consistent (arm 1)",
+    "wafen_da": "WAFEN aligned (arm 2: domain alignment)",
+    "wafen_da20": "WAFEN aligned, 20 ep (arm 2)",
+}
+
+
+def _method_label(row: dict) -> str:
+    """One row per *variant*, not per method name.
+
+    Every WAFEN configuration was registered as method "WAFEN"; the checkpoint and the
+    rendering flags in `config` are what distinguish the thesis's arms and variants.
+    Without this, "last row wins" silently replaces arm one's number with arm two's.
+    """
+    method = row.get("method") or "?"
+    cfg = row.get("config") or {}
+    if not method.startswith("WAFEN"):
+        return method
+    stem = Path(cfg.get("checkpoint", "wafen/best.pt")).parent.name
+    label = CHECKPOINT_LABEL.get(stem, f"{method} [{stem}]")
+    if method == "WAFEN+SNFEN":
+        label = f"WAFEN mask+ori -> SNFEN [{stem}]"
+    if cfg.get("blend"):
+        label += " + confidence blend"
+    if cfg.get("abstain_threshold") is not None:
+        label += (f" + abstention t={cfg['abstain_threshold']}"
+                  + (f" block={cfg['block']}" if cfg.get("block") else ""))
+    return label
+
 
 def _latest_per_condition(rows: list[dict]) -> dict[tuple[str, str], dict]:
-    """Last row wins for each (dataset, method): the registry is append-only,
+    """Last row wins for each (dataset, variant): the registry is append-only,
     so a re-run supersedes rather than replaces."""
     latest: dict[tuple[str, str], dict] = {}
     for r in rows:
         if r.get("experiment") != "baseline-nbis":
             continue
-        latest[(r.get("dataset") or "?", r.get("method") or "?")] = r
+        latest[(r.get("dataset") or "?", _method_label(r))] = r
     return latest
 
 
