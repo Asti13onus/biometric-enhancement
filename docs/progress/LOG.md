@@ -21,6 +21,16 @@ thesis narrative — write it as if a reader in month nine needs it.
 - `results/figures/precision_coverage.png`: our curve, every baseline a point at 1.0.
   All eight conditions in the registry; figures labelled synthetic throughout.
 
+**U11 — paired verdicts (mindtct chain)**
+- **SNFEN vs none: −0.0095 [−0.0208, +0.0017] — not resolved.** The 2026 SOTA's gain
+  over no enhancement on FVC2004-B does not survive the powered paired test at this
+  benchmark's size.
+- **Arm 2 vs arm 1: −0.0247 [−0.0359, −0.0140] — resolved, alignment better.** The
+  thesis's central comparison excludes zero by its full interval width; it is
+  statistically stronger than the SOTA's own improvement claim on the same benchmark.
+- Pending: the same comparison under the LEADER chain (extractor independence), queued
+  behind the U12 benchmark for machine time.
+
 **U11 — paired bootstrap and the second chain (built; comparisons running)**
 - `paired_bootstrap_eer_difference`: pair indices drawn once per resample, applied to
   both conditions; tests assert the paired interval is strictly narrower than the
