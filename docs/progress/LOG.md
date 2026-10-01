@@ -6,6 +6,31 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-10-01 — Session 12: U9 and U11 — the thesis figure, and abstention answered
+
+**U9 — minutiae precision and the precision–coverage curve (synthetic pseudo-GT)**
+- Held-out test split (1,290 impressions, 430 fingers), deterministic wear at severity
+  0.5; pseudo-GT = mindtct on each clean master; Cappelli correspondence (14 px, π/9).
+- **Enhancement works on its home domain**: precision 0.559 → **0.815**, recall 0.397 →
+  **0.634** over no enhancement. WAFEN vs SNFEN: precision 0.815 vs 0.832, recall 0.634
+  vs 0.575 — **higher F1 (0.713 vs 0.680) at ~3× less compute**.
+- **AE2 answered: no.** The sweep (t = 0.10…0.40, block 16, pre-registered) is nearly
+  flat in precision (+0.007 at 90% coverage) while EER worsens 0.0001 → 0.0155.
+  Discarding uncertain minutiae does not beat keeping them — on either domain, since
+  FVC2004 showed the same. A designed, falsifiable claim, tested and falsified.
+- `results/figures/precision_coverage.png`: our curve, every baseline a point at 1.0.
+  All eight conditions in the registry; figures labelled synthetic throughout.
+
+**U11 — paired bootstrap and the second chain (built; comparisons running)**
+- `paired_bootstrap_eer_difference`: pair indices drawn once per resample, applied to
+  both conditions; tests assert the paired interval is strictly narrower than the
+  marginal comparison and that shared pair noise cancels.
+- LEADER wrapped as a second extraction chain emitting `.xyt` (conventions converted
+  and tested against mindtct); `run_baseline` gains an `extract` hook;
+  `experiments/paired_compare.py` reports the EER difference with a verdict row.
+
+---
+
 ## 2026-09-27 — Session 11: arm two moves the matcher — the comparison has its finding
 
 **Arm two — unsupervised domain alignment (Joshi line), on the same harness**
