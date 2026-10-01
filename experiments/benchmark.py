@@ -72,7 +72,8 @@ def run_cell(dataset_label, manifest, data_root, work, method, notes, done, dry_
         return
     print(f"  running {dataset_label} / {label}")
     result = run_baseline(manifest_path=manifest, data_root=data_root, work_dir=work,
-                          preprocess=enhancer_for(method, work), progress=print)
+                          preprocess=enhancer_for(method, work), max_impostor=30_000,
+                          progress=print)
     m = result.metrics
     print(f"    EER {m['eer']:.4f} [{m['eer_ci_low']:.4f}, {m['eer_ci_high']:.4f}]  "
           f"NFIQ2 {m.get('nfiq2_mean', float('nan')):.1f}")

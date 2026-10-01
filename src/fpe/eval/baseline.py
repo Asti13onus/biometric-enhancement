@@ -85,6 +85,7 @@ def run_baseline(
     postprocess: Callable[[Path, Path], Path] | None = None,
     extract: Callable[[Path], Path] | None = None,
     impostor: ImpostorMode = "all",
+    max_impostor: int | None = None,
     n_resamples: int = 1000,
     seed: int = 0,
     progress: Callable[[str], None] = lambda _msg: None,
@@ -132,7 +133,10 @@ def run_baseline(
             progress(f"  templates {n}/{len(impressions)} ({len(failed)} failed)")
 
     usable = [im for im in impressions if im.relpath in templates]
-    pairs = build_pairs(usable, impostor=impostor)
+    # Uncapped impostor sets are not only slow: MINEX's 317k pairs made bozorth3's
+    # up-front mates allocation fail with malloc ENOMEM. Seeded subsampling is unbiased
+    # for EER (see protocol._subsample_impostors).
+    pairs = build_pairs(usable, impostor=impostor, max_impostor=max_impostor, seed=seed)
     if not pairs.genuine or not pairs.impostor:
         raise ValueError(
             f"insufficient pairs after enrolment: {len(pairs.genuine)} genuine, "
