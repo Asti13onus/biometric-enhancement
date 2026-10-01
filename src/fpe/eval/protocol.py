@@ -110,7 +110,16 @@ def parse_manifest(
             relpath = row["relpath"]
             if subset and not relpath.startswith(subset):
                 continue
-            ident = _identity(row["dataset"], relpath)
+            # Identity columns outrank filename conventions. MINEX names encode
+            # subject-and-encounter, not finger: a001_02 and a001_03 are *different
+            # fingers* of subject 001, while a001_02 and b001_02 are two encounters of
+            # the same finger -- filename parsing would invert both facts.
+            if row.get("subject") and row.get("finger"):
+                prefix = row["dataset"]
+                ident = (f"{prefix}/{row['subject']}_{row['finger']}",
+                         Path(relpath).stem, prefix)
+            else:
+                ident = _identity(row["dataset"], relpath)
             if ident is None:
                 continue
             finger_id, impr, scope = ident
