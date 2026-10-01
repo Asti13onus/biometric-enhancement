@@ -14,7 +14,8 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
-__all__ = ["ErrorRates", "compute_eer", "bootstrap_eer", "far_at_frr", "frr_at_far"]
+__all__ = ["ErrorRates", "PairedDifference", "compute_eer", "bootstrap_eer",
+           "paired_bootstrap_eer_difference", "far_at_frr", "frr_at_far"]
 
 
 @dataclass(frozen=True)
@@ -138,3 +139,66 @@ def far_at_frr(genuine, impostor, frr: float) -> float:
     if ok.size == 0:
         return 1.0
     return float(fmr[ok[-1]])
+
+
+@dataclass(frozen=True)
+class PairedDifference:
+    """EER difference B - A with a paired-bootstrap interval. Negative favours B."""
+
+    eer_a: float
+    eer_b: float
+    difference: float
+    ci_low: float
+    ci_high: float
+    n_resamples: int
+
+    @property
+    def excludes_zero(self) -> bool:
+        return self.ci_low > 0.0 or self.ci_high < 0.0
+
+    def as_dict(self) -> dict[str, object]:
+        return {"eer_a": self.eer_a, "eer_b": self.eer_b,
+                "eer_difference": self.difference,
+                "diff_ci_low": self.ci_low, "diff_ci_high": self.ci_high,
+                "excludes_zero": self.excludes_zero, "n_resamples": self.n_resamples}
+
+
+def paired_bootstrap_eer_difference(
+    genuine_a, impostor_a, genuine_b, impostor_b, *,
+    n_resamples: int = 2000, confidence: float = 0.95, seed: int = 0,
+) -> PairedDifference:
+    """Bootstrap the EER *difference* by resampling pairs, not scores.
+
+    The marginal intervals of two conditions evaluated on the same pairs share the
+    sampling noise of those pairs; comparing them by interval overlap throws that
+    pairing away and is far too weak to resolve differences of a point or two of EER.
+    Here each resample draws one set of genuine indices and one set of impostor indices
+    and applies them to *both* conditions, so the pair-sampling noise cancels inside
+    the difference. Inputs must therefore be aligned: element i of `genuine_a` and
+    `genuine_b` is the same physical pair under the two conditions.
+    """
+    ga, ia = _as_scores(genuine_a, impostor_a)
+    gb, ib = _as_scores(genuine_b, impostor_b)
+    if ga.size != gb.size or ia.size != ib.size:
+        raise ValueError(
+            f"paired testing needs identical pair sets: genuine {ga.size} vs {gb.size}, "
+            f"impostor {ia.size} vs {ib.size}. Restrict both conditions to the pairs "
+            f"enrolled under both before calling this."
+        )
+
+    point_a = compute_eer(ga, ia).eer
+    point_b = compute_eer(gb, ib).eer
+
+    rng = np.random.default_rng(seed)
+    draws = np.empty(n_resamples, dtype=np.float64)
+    for i in range(n_resamples):
+        g_idx = rng.integers(0, ga.size, size=ga.size)
+        i_idx = rng.integers(0, ia.size, size=ia.size)
+        draws[i] = compute_eer(gb[g_idx], ib[i_idx]).eer - compute_eer(ga[g_idx], ia[i_idx]).eer
+
+    tail = (1.0 - confidence) / 2 * 100
+    low, high = np.percentile(draws, [tail, 100 - tail])
+    return PairedDifference(eer_a=point_a, eer_b=point_b,
+                            difference=point_b - point_a,
+                            ci_low=float(low), ci_high=float(high),
+                            n_resamples=n_resamples)
