@@ -29,6 +29,22 @@ thesis narrative — write it as if a reader in month nine needs it.
 - Pre-committed follow-up (allowed by yesterday's criterion "0.0991–0.1310 → one longer
   run is justified"): a single 20-epoch alignment run, same recipe, no other changes.
 
+**Pre-registered 20-epoch run — plateau confirmed, arm two closed**
+- Training curves matched the 8-epoch run (best real-val ridge 0.2917 vs 0.2929;
+  consistency floor ~0.0365 vs 0.0372); the annealing phase added nothing.
+- FVC2004: EER 0.1139 [0.1026, 0.1253] — statistically identical to the 8-epoch run's
+  0.1105 [0.0985, 0.1232]. Per the criterion fixed in advance, **0.1105 stands as arm
+  two's final number** and no further arm-two variants will be run.
+- Arm-two per-DB: DB1 0.1520, DB2 0.1715, DB3 0.0470, **DB4 0.0461** — the best cell of
+  any method on DB4 (vs none 0.0607, SNFEN 0.0661), with the caveat that DB4 is
+  SFinGe-generated, the domain nearest the training distribution.
+- Final standings on FVC2004, one harness: SNFEN 0.0895 · none 0.0991 · **arm two
+  0.1105** · arm one (best) 0.1310 · arm one (plain) 0.1353. The comparison's finding:
+  post-hoc alignment > corrected synthesis (disjoint CIs); neither beats the unenhanced
+  control on worn-print data outside the alignment literature's home benchmark.
+- Remaining: arm three (unpaired translation, Karabulut) — needs an ADR on GAN scope
+  within the parameter budget before any build; then U9–U12 and the write-up.
+
 **Machine note:** the leaked-`explorer.exe` commit exhaustion recurred twice (~1.4 GB/h);
 killing it restores ~13 GB. Root-cause with ShellExView after the thesis runs.
 
