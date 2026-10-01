@@ -93,6 +93,14 @@ def prepare_minex_png() -> tuple[Path, Path]:
     src_manifest = MANIFESTS / "minex.csv"
     raw_root = ROOT / "data" / "raw" / "minex"
     rows = list(csv.DictReader(src_manifest.open(newline="", encoding="utf-8")))
+    # The validation imagery ships calibration patterns alongside fingers --
+    # random_rects.gray parses to subject "andom". A fingerprint row has a
+    # three-digit subject; anything else is test imagery, not a finger.
+    fingers = [r for r in rows if r["subject"].isdigit() and len(r["subject"]) == 3]
+    if len(fingers) != len(rows):
+        dropped = sorted(Path(r["relpath"]).name for r in rows if r not in fingers)
+        print(f"  minex: excluding {len(dropped)} non-finger image(s): {dropped}")
+    rows = fingers
     if out_manifest.is_file():
         return out_manifest, out_root
     for row in rows:

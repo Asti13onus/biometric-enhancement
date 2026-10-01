@@ -67,3 +67,20 @@ def test_mismatched_pair_sets_are_refused():
     g, i, gb, ib = _two_conditions(1.0)
     with pytest.raises(ValueError, match="identical pair sets"):
         paired_bootstrap_eer_difference(g[:-1], i, gb, ib)
+
+
+def test_oversized_templates_are_trimmed_by_quality_for_bozorth3(tmp_path):
+    """One hallucinated template must not kill a whole -M batch (U12, minex)."""
+    from fpe.metrics.nbis import BOZORTH_MAX_MINUTIAE, _within_bozorth_limit
+
+    big = tmp_path / "big.xyt"
+    big.write_text("\n".join(f"{i} {i} 0 {i % 100}" for i in range(230)) + "\n",
+                   encoding="ascii")
+    trimmed = _within_bozorth_limit(big)
+    assert trimmed != big and trimmed.is_file()
+    rows = trimmed.read_text().splitlines()
+    assert len(rows) == BOZORTH_MAX_MINUTIAE
+    assert min(int(r.split()[3]) for r in rows) >= 50   # kept the high-quality tail
+    small = tmp_path / "small.xyt"
+    small.write_text("1 2 3 4\n", encoding="ascii")
+    assert _within_bozorth_limit(small) == small        # untouched below the limit
