@@ -125,6 +125,85 @@ def significance_notes(rows: list[dict]) -> str:
     return ("\n".join(out) + "\n") if out else ""
 
 
+def _eer_cell(m: dict) -> str:
+    return f"{m['eer']:.4f} [{m['eer_ci_low']:.4f}, {m['eer_ci_high']:.4f}]"
+
+
+def _latest(rows, experiment):
+    """Append-only registry: the last row wins per (dataset, method)."""
+    latest: dict[tuple[str, str], dict] = {}
+    for r in rows:
+        if r.get("experiment") == experiment:
+            latest[(r["dataset"], r["method"])] = r
+    return latest
+
+
+def benchmark_table(rows: list[dict]) -> str:
+    """U12: held-out sets, the severity axis, and MINEX position strata."""
+    latest = _latest(rows, "benchmark")
+    if not latest:
+        return "_No benchmark rows yet._\n"
+    methods = sorted({m for _, m in latest},
+                     key=lambda m: (0 if m == "none" else 1 if m == "SNFEN" else 2, m))
+
+    def block(title, datasets):
+        if not datasets:
+            return ""
+        head = "| Dataset | " + " | ".join(METHOD_LABEL.get(m, m) for m in methods) + " |"
+        out = [f"### {title}", "", head, "|---|" + "---|" * len(methods)]
+        for d in datasets:
+            cells = [(_eer_cell(latest[(d, m)]["metrics"]) if (d, m) in latest
+                      else "absent") for m in methods]
+            out.append(f"| {d} | " + " | ".join(cells) + " |")
+        return "\n".join(out) + "\n\n"
+
+    all_ds = sorted({d for d, _ in latest})
+    plain = [d for d in all_ds if "wear" not in d and "/" not in d]
+    wear = sorted((d for d in all_ds if "wear" in d),
+                  key=lambda d: float(d.split("wear")[1].strip(" )")))
+    strata = [d for d in all_ds if d.startswith("minex/")]
+    return (block("Held-out real sets (EER)", plain)
+            + block("Wear-severity axis, CrossMatch (EER)", wear)
+            + block("MINEX finger-position strata (EER)", strata))
+
+
+def precision_coverage_table(rows: list[dict]) -> str:
+    """U9. Synthetic pseudo-GT throughout; never comparable to SD27 numbers."""
+    latest = {r["method"]: r for r in rows
+              if r.get("experiment") == "precision-coverage"}
+    if not latest:
+        return "_No precision-coverage rows yet._\n"
+    out = ["| Condition | Coverage | Precision | Recall | F1 | Type-exact P | EER |",
+           "|---|---|---|---|---|---|---|"]
+    order = sorted(latest, key=lambda k: (k.startswith("WAFEN@"),
+                                          -latest[k]["metrics"]["coverage"], k))
+    for name in order:
+        m = latest[name]["metrics"]
+        out.append(f"| {name} | {m['coverage']:.1%} | {m['precision']:.3f} "
+                   f"| {m['recall']:.3f} | {m['f1']:.3f} | {m['tx_precision']:.3f} "
+                   f"| {m['eer']:.4f} |")
+    return ("\n".join(out) + "\n\n_Synthetic pseudo-GT (clean-master mindtct), wear "
+            "severity 0.5; not comparable to published SD27 numbers._\n")
+
+
+def paired_table(rows: list[dict]) -> str:
+    """U11: the powered paired-bootstrap verdicts."""
+    seen: dict[tuple[str, str], dict] = {}
+    for r in rows:
+        if r.get("experiment") == "paired-compare":
+            seen[(r["dataset"], r["method"])] = r
+    if not seen:
+        return "_No paired comparisons yet._\n"
+    out = ["| Dataset | Comparison | EER difference (B - A) | 95% CI | Verdict |",
+           "|---|---|---|---|---|"]
+    for (d, name), r in sorted(seen.items()):
+        m = r["metrics"]
+        out.append(f"| {d} | {name} | {m['eer_difference']:+.4f} "
+                   f"| [{m['diff_ci_low']:+.4f}, {m['diff_ci_high']:+.4f}] "
+                   f"| {m['verdict']} |")
+    return "\n".join(out) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--write", action="store_true", help="write results/tables/")
@@ -147,6 +226,12 @@ def main() -> int:
         + baseline_table(rows)
         + "\n## Against the no-enhancement control\n\n"
         + significance_notes(rows)
+        + "\n## Benchmark (U12)\n\n"
+        + benchmark_table(rows)
+        + "\n## Minutiae precision and coverage (U9)\n\n"
+        + precision_coverage_table(rows)
+        + "\n## Paired comparisons (U11)\n\n"
+        + paired_table(rows)
     )
     print(body)
 
