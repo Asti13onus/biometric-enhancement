@@ -6,7 +6,7 @@ rem Starts from the ARM-ONE checkpoint (data\work\wafen\best.pt, synthetic-only)
 rem prints enter undamaged with photometric jitter, labelled by the model itself
 rem (scripts\build_pseudo_annotations.py must have run first), with pair-consistency in
 rem both domains. Writes data\work\wafen_da20\best.pt. ~2.5 h -- the pre-registered longer run:
-rem One process, auto-resume, retries. Run from its own window, not inside the IDE.
+rem One process, auto-resume, retries. Run from its own window.
 rem   progress: data\work\align_da20.log
 
 setlocal

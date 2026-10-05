@@ -2,7 +2,7 @@
 rem Pair-consistent fine-tune: two damaged views per print + consistency loss.
 rem Starts from data\work\wafen_mn\best.pt; writes data\work\wafen_pc\best.pt. ~70 min.
 rem Batch is 2 PAIRS (4 images) -- a pair costs two images of VRAM.
-rem One process, auto-resume, retries. Run from its own window, not inside the IDE.
+rem One process, auto-resume, retries. Run from its own window.
 rem   progress: data\work\finetune_pc.log
 
 setlocal

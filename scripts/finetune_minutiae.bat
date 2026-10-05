@@ -1,7 +1,7 @@
 @echo off
 rem Fine-tune WAFEN with the minutia-aware loss, from data\work\wafen_ft\best.pt.
 rem Writes data\work\wafen_mn\best.pt. ~50 min. One process, auto-resume, retries.
-rem Run from its own window (double-click), not inside the IDE.
+rem Run from its own window (double-click).
 rem   progress: data\work\finetune_mn.log
 
 setlocal

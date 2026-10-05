@@ -156,8 +156,8 @@ killing it restores ~13 GB. Root-cause with ShellExView after the thesis runs.
   while VS Code, Dropbox and Edge held ~5 GB; closing them took epochs 8 → 3.5 min.
   **16 GB of RAM would remove most of this project's friction.**
 - `scripts/train_simple.bat`: one process, short epochs, atomic checkpoints, auto-resume
-  and retry. Must be started from its own window — started from inside the IDE, it
-  died with the IDE.
+  and retry. Must be started from its own window — started from inside the IDE terminal, it
+  died with the terminal.
 
 **Run:** 10 × 400 steps, batch 4 × accumulate 4, fp32, 51 min. Best val ridge **0.260**
 (epoch 7, from 0.446), plateaued over the last three epochs. Orientation, segmentation and

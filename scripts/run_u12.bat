@@ -1,7 +1,7 @@
 @echo off
 rem U12: full benchmark -- methods x held-out sets, wear-severity axis, MINEX position
 rem strata. Every cell is one registry row and already-present cells are skipped, so
-rem re-running resumes. Several hours; run from its own window, not inside the IDE.
+rem re-running resumes. Several hours; run from its own window.
 rem   progress: data\work\u12.log
 
 setlocal

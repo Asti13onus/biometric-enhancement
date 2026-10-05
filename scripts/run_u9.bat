@@ -2,7 +2,7 @@
 rem U9: minutiae precision + precision-coverage curve on the synthetic test split.
 rem Fully resumable (degraded images, GT and enhanced caches all skip-if-exists).
 rem ~2.5 h: SNFEN enhancement of 1,290 prints is the long pole. Run from its own
-rem window, not inside the IDE.
+rem window.
 rem   progress: data\work\u9\run.log
 
 setlocal

@@ -3,7 +3,7 @@ rem Fine-tune WAFEN on synthetic Anguli + real non-test prints (teacher distilla
 rem Starts from data\work\wafen\best.pt; writes data\work\wafen_ft\best.pt. ~30 min.
 rem Needs scripts\label_real.bat to have finished first.
 rem One process, auto-resume, retries on crash. Run it from its own window, not inside
-rem the IDE. Keep --epochs the same across restarts: the LR schedule is sized from it.
+rem the IDE terminal. Keep --epochs the same across restarts: the LR schedule is sized from it.
 rem   progress: data\work\finetune.log
 
 setlocal

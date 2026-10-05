@@ -1,7 +1,7 @@
 @echo off
 rem Label real, non-test prints with the pyfing teachers (~40 min, 1,160 prints).
 rem One process, 4 threads, resumable: re-run this file after any crash to continue.
-rem Double-click it, or run it from a terminal that is NOT inside the IDE.
+rem Double-click it, or run it from its own terminal window.
 rem   progress: data\work\label_real.log
 
 setlocal
