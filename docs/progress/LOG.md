@@ -6,6 +6,56 @@ thesis narrative — write it as if a reader in month nine needs it.
 
 ---
 
+## 2026-10-05 — Session 13: U12 complete — the benchmark, the crossover, and closure
+
+**U12 — 45 registry cells: held-out sets, the severity axis, position strata**
+- Held-out real sets (EER, none / SNFEN / WAFEN-aligned): CrossMatch 0.0066 / 0.0209 /
+  0.0344; MINEX 0.0911 / 0.0690 / 0.0882; FVS 0.0410 / 0.0711 / 0.0671. **Enhancement
+  hurts clean prints — SOTA included — and helps only the degraded set.**
+- **The severity crossover (AE3), the thesis's second figure**
+  (`results/figures/severity_crossover.png`): CrossMatch degraded by the wear model at
+  0.3/0.5/0.7, same 408 prints throughout. Unenhanced EER climbs 0.0066 → 0.2387;
+  SNFEN holds 0.0209 → 0.0750; **WAFEN holds 0.0344 → 0.1206 — halving the unenhanced
+  error at 0.5 and 0.7 with disjoint CIs**, at one network against four. Crossover
+  near severity 0.3. Caveat carried: the degradation is our wear model, WAFEN's
+  training family (SNFEN never saw it either; inputs are real prints).
+- MINEX position strata: little fingers are the hard stratum (none 0.18–0.19);
+  per-position intervals are wide (≈50 fingers each) — reported as context, not claims.
+- Two harness defects found and fixed by the run itself: MINEX's validation imagery
+  ships four calibration patterns that parsed as fingers (roster now 797; identities
+  from manifest columns after the subject/finger fix); and bozorth3's -M mode
+  malloc-fails on a 634k-line mates list — run_baseline now exposes the seeded
+  impostor cap (30k) and oversized templates are quality-trimmed non-destructively.
+- MINEX cells re-logged under the clean roster and capped pairs: values stable
+  (0.0911 / 0.0690 / 0.0882) — the original numbers were robust.
+
+**U11 — paired verdicts, completed on the mindtct chain**
+- **minex, SNFEN vs none: −0.0221 [−0.0461, −0.0060] — resolved.** "Enhancement helps
+  genuinely degraded real prints" is now significance-tested, the deployment claim.
+- Standing trio: arm2 > arm1 (resolved, −0.0247); SNFEN > none on MINEX (resolved);
+  SNFEN > none on FVC2004 (not resolved even paired).
+- Remaining: the LEADER-chain repeat of none-vs-SNFEN (`scripts/run_u11_leader.bat`),
+  the last run of the semester.
+
+**Results-chapter tooling**
+- `make_tables.py` renders the benchmark (absent cells reported as absent), the
+  precision–coverage table and the paired verdicts from the registry;
+  `make_severity_figure.py` draws the crossover. The results chapter regenerates from a
+  clean checkout plus the registry — U12's verification criterion met.
+
+**The semester's findings, as the discussion chapter will argue them**
+1. Post-hoc domain alignment beats corrected synthesis (resolved, disjoint CIs) —
+   the first controlled head-to-head of the literature's responses.
+2. Enhancement must be quality-gated: harmful on clean prints (every method),
+   breakeven at light wear, dramatically beneficial at heavy wear (crossover ≈ 0.3).
+3. Image quality metrics do not predict matching (NFIQ 2 up, EER flat or worse —
+   shown on three independent axes).
+4. Abstention falsified on both domains (U9's sweep; FVC2004's gates).
+5. The degradation model is corrected synthesis's ceiling (four improving proxies,
+   one immobile matcher — session 10's diagnosis, unrefuted since).
+
+---
+
 ## 2026-10-01 — Session 12: U9 and U11 — the thesis figure, and abstention answered
 
 **U9 — minutiae precision and the precision–coverage curve (synthetic pseudo-GT)**
