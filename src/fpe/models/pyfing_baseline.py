@@ -25,7 +25,7 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["PyfingEnhancer", "ENHANCEMENT_METHODS"]
+__all__ = ["PyfingEnhancer", "WafenPyfingEnhancer", "ENHANCEMENT_METHODS"]
 
 ENHANCEMENT_METHODS = ("SNFEN", "GBFEN")
 
@@ -105,9 +105,10 @@ class PyfingEnhancer:
         return out
 
     def _enhance(self, img: np.ndarray, torch) -> tuple[np.ndarray, np.ndarray | None]:
-        import pyfing as pf
+        from fpe.models.pyfing_runtime import load_pyfing, pyfing_cpu
 
-        with torch.no_grad():
+        pf = load_pyfing()
+        with pyfing_cpu():
             mask = pf.fingerprint_segmentation(img, dpi=self.dpi, method=self.segmentation)
             ori = pf.orientation_field_estimation(
                 img, mask, dpi=self.dpi, method=self.orientation
@@ -118,4 +119,53 @@ class PyfingEnhancer:
             enhanced = pf.fingerprint_enhancement(
                 img, ori, per, mask, dpi=self.dpi, method=self.method
             )
+        return np.asarray(enhanced, dtype=np.uint8), mask
+
+
+class WafenPyfingEnhancer(PyfingEnhancer):
+    """Hybrid: WAFEN's segmentation and orientation feed pyfing's frequency and enhancer.
+
+    SNFEN needs three upstream estimates from three networks (SUFS, SNFOE, SNFFE). WAFEN
+    produces segmentation and orientation in one pass -- it was supervised by SUFS and
+    SNFOE, so its angles are in pyfing's own convention. Frequency still comes from SNFFE
+    because WAFEN's period head did not learn (6.2 px MAE). The chain drops from four
+    networks to three, and WAFEN's ridge head -- the part that invents ridges on real
+    prints -- is not used at all.
+    """
+
+    def __init__(self, method: str = "SNFEN", *, checkpoint: str | Path,
+                 cache_dir: str | Path, **kwargs) -> None:
+        super().__init__(method, cache_dir=cache_dir, **kwargs)
+        from fpe.models.wafen_enhancer import WafenEnhancer
+
+        self.cache_dir = Path(cache_dir) / f"enhanced_wafen_{method.lower()}"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.wafen = WafenEnhancer(checkpoint, cache_dir=self.cache_dir / "unused")
+
+    def estimates(self, img: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """(mask uint8 0/255, orientation radians) from one WAFEN forward pass."""
+        import torch
+
+        from fpe.models.wafen import decode_orientation
+
+        h, w = img.shape
+        stride = self.wafen.stride
+        padded = np.pad(img.astype(np.float32) / 255.0,
+                        ((0, -h % stride), (0, -w % stride)), constant_values=1.0)
+        with torch.no_grad():
+            out = self.wafen.model(torch.from_numpy(padded)[None, None])
+        ori = decode_orientation(out.orientation)[0, 0, :h, :w].numpy().astype(np.float32)
+        seg = out.segmentation[0, 0, :h, :w].numpy()
+        return np.where(seg >= self.wafen.mask_threshold, 255, 0).astype(np.uint8), ori
+
+    def _enhance(self, img: np.ndarray, torch) -> tuple[np.ndarray, np.ndarray | None]:
+        from fpe.models.pyfing_runtime import load_pyfing, pyfing_cpu
+
+        mask, ori = self.estimates(img)
+        pf = load_pyfing()
+        with pyfing_cpu():
+            per = pf.frequency_estimation(img, ori, mask, dpi=self.dpi,
+                                          method=self.frequency)
+            enhanced = pf.fingerprint_enhancement(img, ori, per, mask, dpi=self.dpi,
+                                                  method=self.method)
         return np.asarray(enhanced, dtype=np.uint8), mask

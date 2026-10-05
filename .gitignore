@@ -68,3 +68,4 @@ configs/local.yaml
 
 # Local temp, kept off the C: drive (see docs/environment-tuning.md)
 /.tmp/
+/PROJECT_RULES.md

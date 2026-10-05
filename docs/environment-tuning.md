@@ -125,7 +125,7 @@ To revert:
 |---|---|---|
 | `Downloads` | **96 GB** | **The single biggest consumer on the drive.** Personal data, so untouched. Windows can relocate it properly: right-click Downloads → Properties → **Location** → Move… → an E: path. That moves the contents and repoints every app that writes there. |
 | `AppData\Local\CrashDumps` | 0.18 GB | Safe to clear by hand; a tooling guard blocks automated deletion under `AppData`. |
-| the IDE scratchpad | small | Lives under the old `TEMP`. New sessions use `E:\localtemp` now the variable is set. |
+| agent scratchpad | small | Lives under the old `TEMP`. New sessions use `E:\localtemp` now the variable is set. |
 
 Moving Downloads plus the pagefile would take C: from ~20 GB free to well over 100 GB, at
 which point none of this is a constraint any more.

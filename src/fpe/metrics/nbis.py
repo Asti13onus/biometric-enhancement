@@ -132,6 +132,29 @@ def match_xyt(probe: str | Path, gallery: str | Path, *, timeout: int = 120) -> 
     return int(text[-1].split()[-1])
 
 
+BOZORTH_MAX_MINUTIAE = 150
+"""bozorth3 refuses templates above its minutiae limit, and in -M mode one oversized
+template kills the entire batch. 150 is its documented default; a pathological input --
+an enhancer hallucinating on non-ridge content -- can exceed it."""
+
+
+def _within_bozorth_limit(xyt: Path) -> Path:
+    """The template itself, or a cached sibling trimmed to the highest-quality minutiae.
+
+    Trimming by quality is the standard NIST treatment; the original template is never
+    modified, so precision metrics computed from it are unaffected.
+    """
+    lines = xyt.read_text(encoding="ascii").splitlines()
+    if len(lines) <= BOZORTH_MAX_MINUTIAE:
+        return xyt
+    trimmed = xyt.with_suffix(".trim.xyt")
+    if not trimmed.is_file():
+        keep = sorted(lines, key=lambda l: int(l.split()[3]), reverse=True)
+        trimmed.write_text("\n".join(keep[:BOZORTH_MAX_MINUTIAE]) + "\n",
+                           encoding="ascii")
+    return trimmed
+
+
 def match_many(
     pairs: Sequence[tuple[str | Path, str | Path]],
     *,
@@ -146,9 +169,10 @@ def match_many(
     """
     mates = Path(mates_file)
     mates.parent.mkdir(parents=True, exist_ok=True)
+    safe = {p: _within_bozorth_limit(Path(p)) for pair in pairs for p in pair}
     with mates.open("w", encoding="utf-8", newline="\n") as fh:
         for probe, gallery in pairs:
-            fh.write(f"{Path(probe).as_posix()}\n{Path(gallery).as_posix()}\n")
+            fh.write(f"{safe[probe].as_posix()}\n{safe[gallery].as_posix()}\n")
 
     # maxfiles defaults to 10,000; our impostor lists run to hundreds of
     # thousands of lines, and bozorth3 refuses rather than truncating.

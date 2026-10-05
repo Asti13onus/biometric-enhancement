@@ -43,6 +43,8 @@ def _template_for(
     cache_dir: Path,
     work_dir: Path,
     preprocess: Callable[[Path], Path] | None,
+    postprocess: Callable[[Path, Path], Path] | None = None,
+    extract: Callable[[Path], Path] | None = None,
 ) -> tuple[Path | None, int, Path | None]:
     """Return (xyt path, minutia count, prepared image).
 
@@ -55,9 +57,16 @@ def _template_for(
         png = to_greyscale_png(source, cache_dir)
         if preprocess is not None:
             png = preprocess(png)
-        # mindtct cannot read PNG; lossless JPEG is byte-identical to it.
-        jpl = to_nbis_input(png, cache_dir)
-        xyt = run_mindtct(jpl, work_dir / jpl.stem)
+        if extract is not None:
+            # A second extraction chain (U11): spurious minutiae originate in
+            # extraction, so claims must survive a change of extractor.
+            xyt = extract(png)
+        else:
+            # mindtct cannot read PNG; lossless JPEG is byte-identical to it.
+            jpl = to_nbis_input(png, cache_dir)
+            xyt = run_mindtct(jpl, work_dir / jpl.stem)
+        if postprocess is not None:
+            xyt = postprocess(xyt, png)
     except (OSError, RuntimeError, ValueError):
         return None, 0, png
     count = len(read_xyt(xyt))
@@ -73,7 +82,10 @@ def run_baseline(
     work_dir: str | Path,
     subset: str | None = None,
     preprocess: Callable[[Path], Path] | None = None,
+    postprocess: Callable[[Path, Path], Path] | None = None,
+    extract: Callable[[Path], Path] | None = None,
     impostor: ImpostorMode = "all",
+    max_impostor: int | None = None,
     n_resamples: int = 1000,
     seed: int = 0,
     progress: Callable[[str], None] = lambda _msg: None,
@@ -82,7 +94,9 @@ def run_baseline(
 
     `preprocess` is where an enhancement method plugs in: it receives a
     prepared greyscale PNG and returns the path to an enhanced one. `None` is
-    the no-enhancement control.
+    the no-enhancement control. `postprocess` receives (xyt, enhanced image) after
+    extraction and returns the template to match -- where abstention drops minutiae
+    that fall in regions the method declined to reconstruct.
     """
     data_root = Path(data_root)
     work_dir = Path(work_dir)
@@ -105,6 +119,8 @@ def run_baseline(
             cache_dir=cache_dir,
             work_dir=tmpl_dir,
             preprocess=preprocess,
+            postprocess=postprocess,
+            extract=extract,
         )
         if prepared is not None:
             prepared_images.append(prepared)
@@ -117,7 +133,10 @@ def run_baseline(
             progress(f"  templates {n}/{len(impressions)} ({len(failed)} failed)")
 
     usable = [im for im in impressions if im.relpath in templates]
-    pairs = build_pairs(usable, impostor=impostor)
+    # Uncapped impostor sets are not only slow: MINEX's 317k pairs made bozorth3's
+    # up-front mates allocation fail with malloc ENOMEM. Seeded subsampling is unbiased
+    # for EER (see protocol._subsample_impostors).
+    pairs = build_pairs(usable, impostor=impostor, max_impostor=max_impostor, seed=seed)
     if not pairs.genuine or not pairs.impostor:
         raise ValueError(
             f"insufficient pairs after enrolment: {len(pairs.genuine)} genuine, "

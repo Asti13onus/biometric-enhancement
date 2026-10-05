@@ -1,0 +1,29 @@
+# Wear degradation model defaults (plan U1).
+# Values are at severity 1.0; severity scales them linearly.
+# Mirrors fpe.degradation.wear.WearConfig -- keep the two in step.
+
+ridge_period_px: 9.0          # nominal ridge period at 500 dpi
+
+amplitude_attenuation:
+  enabled: true
+  floor: 0.12                 # ridge contrast surviving in the worst areas
+  scale_px: 48.0              # spatial scale; wear is patchy, not uniform
+
+flexion_creases:
+  enabled: true
+  max_creases: 5
+  width_px: [2.0, 6.0]
+  softness_px: 1.2
+
+dryness_fragmentation:
+  enabled: true
+  fraction_max: 0.40          # image fraction broken at severity 1
+  length_px: 15.0             # correlation ALONG the ridge
+  width_px: 2.5               # correlation across it
+  orientation_bins: 8
+
+partial_contact:
+  enabled: true
+  falloff: 0.85               # contact lost at the periphery at severity 1
+  centre_jitter: 0.12
+  extent: [0.55, 0.85]
