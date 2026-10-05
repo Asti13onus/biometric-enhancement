@@ -123,5 +123,7 @@ _Synthetic pseudo-GT (clean-master mindtct), wear severity 0.5; not comparable t
 
 | Dataset | Comparison | EER difference (B - A) | 95% CI | Verdict |
 |---|---|---|---|---|
+| fvc2004 | SNFEN vs none (leader) | -0.0141 | [-0.0284, -0.0008] | resolved: B better |
 | fvc2004 | SNFEN vs none (mindtct) | -0.0095 | [-0.0208, +0.0017] | not resolved (interval includes zero) |
 | fvc2004 | WAFEN[wafen_da] vs WAFEN[wafen] (mindtct) | -0.0247 | [-0.0359, -0.0140] | resolved: B better |
+| minex | SNFEN vs none (mindtct) | -0.0221 | [-0.0461, -0.0060] | resolved: B better |

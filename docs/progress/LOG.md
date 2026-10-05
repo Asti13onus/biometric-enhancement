@@ -34,8 +34,12 @@ thesis narrative — write it as if a reader in month nine needs it.
   genuinely degraded real prints" is now significance-tested, the deployment claim.
 - Standing trio: arm2 > arm1 (resolved, −0.0247); SNFEN > none on MINEX (resolved);
   SNFEN > none on FVC2004 (not resolved even paired).
-- Remaining: the LEADER-chain repeat of none-vs-SNFEN (`scripts/run_u11_leader.bat`),
-  the last run of the semester.
+- **LEADER chain, FVC2004, SNFEN vs none: −0.0141 [−0.0284, −0.0008] — resolved.**
+  The enhancement effect's direction survives a change of extractor (R17), and notably
+  *resolves* under LEADER where mindtct left it open. Absolute EERs are far higher under
+  LEADER + bozorth3 (0.19 vs 0.10) — the extraction chain dominates absolute numbers,
+  one more reason the thesis reports within-chain comparisons only.
+  **With this, every planned experiment of the semester is complete or ADR-deferred.**
 
 **Results-chapter tooling**
 - `make_tables.py` renders the benchmark (absent cells reported as absent), the
